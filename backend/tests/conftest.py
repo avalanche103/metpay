@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_metpay.db")
 os.environ.setdefault("ARTPAY_API_MODE", "stub")
 
-from app.db import Base, engine  # noqa: E402
+from app.db import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -15,6 +15,13 @@ from app.main import app  # noqa: E402
 def reset_database() -> Generator[None, None, None]:
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        from app.services.default_groups import ensure_default_groups
+
+        ensure_default_groups(db)
+    finally:
+        db.close()
     yield
     Base.metadata.drop_all(bind=engine)
 

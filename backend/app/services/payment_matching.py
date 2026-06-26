@@ -18,6 +18,28 @@ class MatchResult:
     reason: str | None = None
 
 
+def format_name_part(part: str) -> str:
+    if not part:
+        return ""
+    lower = part.lower()
+    return lower[0].upper() + lower[1:] if len(lower) > 1 else lower.upper()
+
+
+def format_full_name(value: str | None) -> str:
+    if not value:
+        return ""
+    cleaned = _SPACES.sub(" ", value.strip())
+    formatted_parts: list[str] = []
+    for token in cleaned.split():
+        if "-" in token:
+            formatted_parts.append(
+                "-".join(format_name_part(piece) for piece in token.split("-") if piece)
+            )
+        else:
+            formatted_parts.append(format_name_part(token))
+    return " ".join(formatted_parts)
+
+
 def normalize_full_name(value: str | None) -> str:
     if not value:
         return ""

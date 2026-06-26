@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import PaymentStatus
+from app.models import PaymentSource, PaymentStatus
 
 
 class GroupCreate(BaseModel):
@@ -30,6 +30,16 @@ class StudentCreate(BaseModel):
     parents: list[ParentCreate] = Field(default_factory=list)
 
 
+class StudentUpdate(BaseModel):
+    full_name: str | None = None
+    group_id: int | None = None
+    active: bool | None = None
+
+
+class StudentMergeRequest(BaseModel):
+    target_student_id: int
+
+
 class ParentRead(ParentCreate):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -40,6 +50,7 @@ class StudentRead(BaseModel):
     full_name: str
     normalized_full_name: str
     group_id: int | None
+    group_name: str | None = None
     active: bool
     parents: list[ParentRead] = Field(default_factory=list)
     model_config = ConfigDict(from_attributes=True)
@@ -53,11 +64,18 @@ class PaymentRead(BaseModel):
     currency: str
     paid_at: datetime | None
     status: PaymentStatus
+    source: PaymentSource
+    season: str | None
+    payment_for: str | None
     ap_erip_service_no: str | None
     ap_erip_invoice_id: str | None
     ap_erip_trn_id: str | None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaymentUpdate(BaseModel):
+    payment_for: str | None = None
 
 
 class ManualMatchRequest(BaseModel):

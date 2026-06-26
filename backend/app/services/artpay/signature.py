@@ -40,3 +40,21 @@ def verify_v3_signature(raw_body: bytes, signature_header: str | None, secret: s
     key_index, _ = signature_header.split(".", 1)
     expected_signature = form_v3_signature(raw_body, secret, key_index)
     return hmac.compare_digest(expected_signature, signature_header.strip('"'))
+
+
+def verify_v2_payload_with_secrets(payload: dict[str, Any], secrets: list[str]) -> bool:
+    return any(verify_v2_payload(payload, secret) for secret in secrets)
+
+
+def verify_v3_signature_with_secrets(
+    raw_body: bytes,
+    signature_header: str | None,
+    secrets: list[str],
+) -> bool:
+    if not signature_header or "." not in signature_header:
+        return False
+    key_index, _ = signature_header.split(".", 1)
+    index = int(key_index) if key_index.isdigit() else 1
+    if 1 <= index <= len(secrets):
+        return verify_v3_signature(raw_body, signature_header, secrets[index - 1])
+    return any(verify_v3_signature(raw_body, signature_header, secret) for secret in secrets)

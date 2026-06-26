@@ -29,6 +29,11 @@ class PaymentStatus(StrEnum):
     duplicate = "duplicate"
 
 
+class PaymentSource(StrEnum):
+    webhook = "webhook"
+    import_ = "import"
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -94,6 +99,13 @@ class Payment(TimestampMixin, Base):
     status: Mapped[PaymentStatus] = mapped_column(
         Enum(PaymentStatus), default=PaymentStatus.received, nullable=False
     )
+    source: Mapped[PaymentSource] = mapped_column(
+        Enum(PaymentSource), default=PaymentSource.webhook, nullable=False
+    )
+    season: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
+    payment_for: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
+    import_batch_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    external_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
 
     ap_store_id: Mapped[str | None] = mapped_column(String(30), nullable=True)
     ap_order_num: Mapped[str | None] = mapped_column(String(64), nullable=True)

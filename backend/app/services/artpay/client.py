@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.config import Settings
-from app.services.artpay.signature import verify_v2_payload, verify_v3_signature
+from app.services.artpay.signature import (
+    verify_v2_payload_with_secrets,
+    verify_v3_signature_with_secrets,
+)
 
 
 @dataclass(frozen=True)
@@ -29,13 +32,15 @@ class ArtPayGateway:
         if self.settings.artpay_store_id and payload_store_id != self.settings.artpay_store_id:
             return ArtPayVerification(valid=False, reason="unexpected ArtPay store id")
 
+        secrets = self.settings.artpay_secrets
+
         if self.settings.artpay_api_mode == "v2_store":
-            if verify_v2_payload(payload, self.settings.artpay_secret):
+            if verify_v2_payload_with_secrets(payload, secrets):
                 return ArtPayVerification(valid=True)
             return ArtPayVerification(valid=False, reason="invalid ArtPay v2 signature")
 
         if self.settings.artpay_api_mode == "v3_epos":
-            if verify_v3_signature(raw_body, signature_header, self.settings.artpay_secret):
+            if verify_v3_signature_with_secrets(raw_body, signature_header, secrets):
                 return ArtPayVerification(valid=True)
             return ArtPayVerification(valid=False, reason="invalid ArtPay v3 signature")
 

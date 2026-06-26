@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models import ArtPayEvent, Payment, PaymentStatus, Student, UnmatchedPayment
+from app.models import ArtPayEvent, Payment, PaymentSource, PaymentStatus, Student, UnmatchedPayment
 from app.services.payment_matching import find_student_for_payer, normalize_full_name
 
 
@@ -105,6 +105,7 @@ def create_payment_from_artpay_payload(db: Session, payload: dict[str, Any]) -> 
         currency=str(payload.get("ap_currency") or "BYN").upper(),
         paid_at=parse_paid_at(payload),
         status=PaymentStatus.received,
+        source=PaymentSource.webhook,
         ap_store_id=str(payload.get("ap_storeid") or payload.get("ap_store_id") or "")
         or None,
         ap_order_num=str(order_num) if order_num is not None else None,

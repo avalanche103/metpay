@@ -50,9 +50,10 @@ def payments_ui() -> str:
       font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     main {
-      max-width: 1180px;
+      width: 100%;
+      max-width: 100%;
       margin: 0 auto;
-      padding: 32px 20px;
+      padding: 20px 16px 32px;
     }
     header {
       display: flex;
@@ -75,17 +76,42 @@ def payments_ui() -> str:
     }
     .toolbar {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-direction: column;
+      align-items: stretch;
       gap: 12px;
       padding: 16px;
       border-bottom: 1px solid var(--line);
     }
+    .filters-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 2px;
+    }
     .filters {
       display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      gap: 10px;
+      width: max-content;
+      min-width: 100%;
+    }
+    .filter-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 0 0 auto;
+      width: 124px;
+    }
+    .filter-field-wide {
+      width: 152px;
+    }
+    .filter-field label {
+      font-size: 12px;
+    }
+    .filter-field select {
+      width: 100%;
+      min-width: 0;
+      padding: 7px 10px;
+      font-size: 13px;
     }
     select, button {
       border: 1px solid var(--line);
@@ -95,12 +121,79 @@ def payments_ui() -> str:
       color: var(--text);
       font: inherit;
     }
+    .inline-select {
+      min-width: 110px;
+      padding: 6px 8px;
+      font-size: 13px;
+    }
     button {
       cursor: pointer;
       background: var(--accent);
       color: white;
       border-color: var(--accent);
       font-weight: 600;
+    }
+    button.btn-secondary {
+      background: var(--card);
+      color: var(--text);
+      border-color: var(--line);
+      font-weight: 500;
+    }
+    .student-cell {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+    }
+    .student-cell .student-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .btn-icon {
+      flex-shrink: 0;
+      padding: 4px 8px;
+      font-size: 12px;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      z-index: 20;
+    }
+    .modal[hidden] { display: none; }
+    .modal-card {
+      width: min(520px, 100%);
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+    }
+    .modal-card h3 {
+      margin: 0 0 8px;
+    }
+    .modal-field {
+      display: grid;
+      gap: 6px;
+      margin: 14px 0;
+    }
+    .modal-field input,
+    .modal-field select {
+      width: 100%;
+    }
+    .modal-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
     }
     .stats {
       display: grid;
@@ -119,17 +212,43 @@ def payments_ui() -> str:
       margin-top: 6px;
       font-size: 22px;
     }
-    .table-wrap { overflow-x: auto; }
+    .table-wrap {
+      overflow-x: auto;
+      max-width: 100%;
+      -webkit-overflow-scrolling: touch;
+    }
+    .payments-table-wrap {
+      border-top: 1px solid var(--line);
+    }
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 980px;
+      min-width: 900px;
     }
     th, td {
       padding: 12px 14px;
       border-bottom: 1px solid var(--line);
       text-align: left;
-      vertical-align: top;
+      vertical-align: middle;
+    }
+    th.col-student,
+    td.col-student {
+      min-width: 200px;
+      max-width: 280px;
+    }
+    th.col-payer,
+    td.col-payer {
+      min-width: 140px;
+      max-width: 200px;
+    }
+    th.col-season,
+    td.col-season {
+      min-width: 88px;
+      white-space: nowrap;
+    }
+    th.col-payment-for,
+    td.col-payment-for {
+      min-width: 132px;
     }
     th {
       color: var(--muted);
@@ -159,6 +278,30 @@ def payments_ui() -> str:
       text-align: center;
       color: var(--muted);
     }
+    .app-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .app-nav a {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .app-nav a.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .section-title {
+      margin: 0 0 12px;
+      font-size: 1.1rem;
+    }
     @media (max-width: 760px) {
       header, .toolbar { align-items: stretch; flex-direction: column; }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -167,6 +310,10 @@ def payments_ui() -> str:
 </head>
 <body>
   <main>
+    <nav class="app-nav" aria-label="Разделы">
+      <a href="/payments-ui" class="active">Платежи</a>
+      <a href="/groups-ui">Группы</a>
+    </nav>
     <header>
       <div>
         <h1>Поступившие платежи</h1>
@@ -193,20 +340,44 @@ def payments_ui() -> str:
 
     <section class="panel">
       <div class="toolbar">
-        <div class="filters">
-          <label for="statusFilter" class="muted">Статус</label>
-          <select id="statusFilter">
-            <option value="">Все</option>
-            <option value="matched">Привязано</option>
-            <option value="needs_review">На проверке</option>
-            <option value="received">Получено</option>
-            <option value="ignored">Игнорировано</option>
-            <option value="duplicate">Дубликат</option>
-          </select>
+        <div class="filters-scroll">
+          <div class="filters">
+          <div class="filter-field filter-field-wide">
+            <label for="seasonFilter" class="muted">Сезон</label>
+            <select id="seasonFilter">
+              <option value="">Все</option>
+              <option value="2025/2026" selected>2025/2026</option>
+            </select>
+          </div>
+          <div class="filter-field filter-field-wide">
+            <label for="paymentForFilter" class="muted">Оплата</label>
+            <select id="paymentForFilter">
+              <option value="">Все</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="statusFilter" class="muted">Статус</label>
+            <select id="statusFilter">
+              <option value="">Все</option>
+              <option value="matched">Привязано</option>
+              <option value="needs_review">На проверке</option>
+              <option value="received">Получено</option>
+              <option value="ignored">Игнорировано</option>
+              <option value="duplicate">Дубликат</option>
+            </select>
+          </div>
+          <div class="filter-field">
+            <label for="groupFilter" class="muted">Группа</label>
+            <select id="groupFilter">
+              <option value="">Все</option>
+              <option value="ungrouped">Без группы</option>
+            </select>
+          </div>
+          </div>
         </div>
         <div class="muted" id="lastUpdated">Еще не обновлялось</div>
       </div>
-      <div class="table-wrap">
+      <div class="table-wrap payments-table-wrap">
         <table>
           <thead>
             <tr>
@@ -214,10 +385,11 @@ def payments_ui() -> str:
               <th>Дата</th>
               <th>Статус</th>
               <th>Сумма</th>
+              <th class="col-season">Сезон</th>
+              <th class="col-payment-for">Оплата</th>
               <th>ФИО из платежа</th>
-              <th>Ученик</th>
-              <th>ЕРИП транзакция</th>
-              <th>Счет / услуга</th>
+              <th class="col-student">Ученик</th>
+              <th>Группа</th>
             </tr>
           </thead>
           <tbody id="paymentsBody"></tbody>
@@ -225,12 +397,81 @@ def payments_ui() -> str:
         <div class="empty" id="emptyState" hidden>Платежей пока нет</div>
       </div>
     </section>
+
+    <section class="panel" aria-label="Отчёты">
+      <h2 style="margin: 0 0 12px; font-size: 1.1rem;">Отчёты за сезон</h2>
+      <div class="stats" style="margin-bottom: 16px;">
+        <div class="stat" style="grid-column: 1 / -1;">
+          <span class="muted">Поступления по месяцам</span>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-bottom: 24px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Месяц</th>
+              <th>Платежей</th>
+              <th>Сумма</th>
+            </tr>
+          </thead>
+          <tbody id="monthsBody"></tbody>
+        </table>
+        <div class="empty" id="monthsEmpty" hidden>Нет данных</div>
+      </div>
+      <div class="stats" style="margin-bottom: 16px;">
+        <div class="stat" style="grid-column: 1 / -1;">
+          <span class="muted">Поступления по ученику</span>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Ученик</th>
+              <th>Группа</th>
+              <th>Платежей</th>
+              <th>Сумма</th>
+            </tr>
+          </thead>
+          <tbody id="studentsBody"></tbody>
+        </table>
+        <div class="empty" id="studentsEmpty" hidden>Нет данных</div>
+      </div>
+    </section>
   </main>
+
+  <div id="studentEditor" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-labelledby="studentEditorTitle">
+      <h3 id="studentEditorTitle">Редактирование ученика</h3>
+      <p class="muted" id="editorPaymentInfo"></p>
+      <label class="modal-field">
+        <span>ФИО ученика</span>
+        <input id="editorFullName" type="text" autocomplete="off">
+      </label>
+      <label class="modal-field">
+        <span>Привязать платёж или объединить с</span>
+        <select id="editorTargetStudent"></select>
+      </label>
+      <div class="modal-actions">
+        <button type="button" id="editorSaveName">Сохранить ФИО</button>
+        <button type="button" id="editorReassign" class="btn-secondary">Привязать платёж</button>
+        <button type="button" id="editorMerge" class="btn-secondary">Объединить учеников</button>
+        <button type="button" id="editorClose" class="btn-secondary">Закрыть</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     const statusFilter = document.querySelector("#statusFilter");
+    const seasonFilter = document.querySelector("#seasonFilter");
+    const paymentForFilter = document.querySelector("#paymentForFilter");
+    const groupFilter = document.querySelector("#groupFilter");
     const paymentsBody = document.querySelector("#paymentsBody");
+    const monthsBody = document.querySelector("#monthsBody");
+    const studentsBody = document.querySelector("#studentsBody");
     const emptyState = document.querySelector("#emptyState");
+    const monthsEmpty = document.querySelector("#monthsEmpty");
+    const studentsEmpty = document.querySelector("#studentsEmpty");
     const lastUpdated = document.querySelector("#lastUpdated");
 
     const statusLabels = {
@@ -240,6 +481,324 @@ def payments_ui() -> str:
       ignored: "Игнорировано",
       duplicate: "Дубликат"
     };
+
+    let studentsById = new Map();
+    let editorContext = null;
+    let paymentForOptions = [];
+    let paymentForLabels = new Map();
+
+    function fillPaymentForFilterOptions(options, selectedValue) {
+      paymentForOptions = options;
+      paymentForLabels = new Map(options.map((item) => [item.value, item.label]));
+      const current = selectedValue ?? paymentForFilter.value;
+      paymentForFilter.replaceChildren();
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "Все";
+      paymentForFilter.appendChild(empty);
+      for (const item of options) {
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label;
+        paymentForFilter.appendChild(option);
+      }
+      paymentForFilter.value = current;
+    }
+
+    async function loadPaymentForOptions(season) {
+      const url = season
+        ? `/api/payments/payment-for-options?season=${encodeURIComponent(season)}`
+        : "/api/payments/payment-for-options";
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Не удалось загрузить периоды оплаты");
+      return response.json();
+    }
+
+    function seasonCell(value) {
+      const td = document.createElement("td");
+      td.className = "col-season";
+      td.textContent = value || "-";
+      return td;
+    }
+
+    function createPaymentForSelect(payment) {
+      const td = document.createElement("td");
+      td.className = "col-payment-for";
+      const select = document.createElement("select");
+      select.className = "inline-select";
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "—";
+      select.appendChild(empty);
+      for (const item of paymentForOptions) {
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label;
+        if (payment.payment_for === item.value) option.selected = true;
+        select.appendChild(option);
+      }
+      select.addEventListener("change", () => {
+        const paymentFor = select.value || null;
+        select.disabled = true;
+        fetch(`/api/payments/${payment.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ payment_for: paymentFor }),
+        })
+          .then((response) => {
+            if (!response.ok) throw new Error("Не удалось сохранить период оплаты");
+            payment.payment_for = paymentFor;
+          })
+          .catch((error) => {
+            lastUpdated.textContent = error.message;
+            select.value = payment.payment_for || "";
+          })
+          .finally(() => {
+            select.disabled = false;
+          });
+      });
+      td.appendChild(select);
+      return td;
+    }
+
+    const studentEditor = document.querySelector("#studentEditor");
+    const editorPaymentInfo = document.querySelector("#editorPaymentInfo");
+    const editorFullName = document.querySelector("#editorFullName");
+    const editorTargetStudent = document.querySelector("#editorTargetStudent");
+
+    function closeStudentEditor() {
+      studentEditor.hidden = true;
+      editorContext = null;
+    }
+
+    function fillTargetStudentOptions(currentStudentId) {
+      editorTargetStudent.replaceChildren();
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "Выберите ученика";
+      editorTargetStudent.appendChild(empty);
+      for (const student of studentsById.values()) {
+        if (!student.active || student.id === currentStudentId) continue;
+        const option = document.createElement("option");
+        option.value = String(student.id);
+        option.textContent = student.full_name;
+        editorTargetStudent.appendChild(option);
+      }
+    }
+
+    function openStudentEditor(payment, student) {
+      editorContext = { payment, student };
+      editorPaymentInfo.textContent =
+        `Платёж #${payment.id} · ${payment.payer_full_name || "без ФИО"}`;
+      editorFullName.value = student.full_name;
+      fillTargetStudentOptions(student.id);
+      studentEditor.hidden = false;
+      editorFullName.focus();
+    }
+
+    async function saveStudentName() {
+      if (!editorContext) return;
+      const response = await fetch(`/api/students/${editorContext.student.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: editorFullName.value }),
+      });
+      if (!response.ok) throw new Error("Не удалось сохранить ФИО");
+      closeStudentEditor();
+      await loadPayments();
+    }
+
+    async function reassignPayment() {
+      if (!editorContext || !editorTargetStudent.value) {
+        throw new Error("Выберите ученика для привязки");
+      }
+      const response = await fetch(`/api/payments/${editorContext.payment.id}/match`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ student_id: Number(editorTargetStudent.value) }),
+      });
+      if (!response.ok) throw new Error("Не удалось привязать платёж");
+      closeStudentEditor();
+      await loadPayments();
+    }
+
+    async function mergeStudents() {
+      if (!editorContext || !editorTargetStudent.value) {
+        throw new Error("Выберите ученика для объединения");
+      }
+      const sourceName = editorContext.student.full_name;
+      const target = studentsById.get(Number(editorTargetStudent.value));
+      const confirmed = window.confirm(
+        `Объединить «${sourceName}» с «${target?.full_name || ""}»? ` +
+          "Все платежи будут перенесены, текущая запись ученика будет деактивирована."
+      );
+      if (!confirmed) return;
+      const response = await fetch(`/api/students/${editorContext.student.id}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_student_id: Number(editorTargetStudent.value) }),
+      });
+      if (!response.ok) throw new Error("Не удалось объединить учеников");
+      closeStudentEditor();
+      await loadPayments();
+    }
+
+    document.querySelector("#editorSaveName").addEventListener("click", () => {
+      saveStudentName().catch((error) => {
+        lastUpdated.textContent = error.message;
+      });
+    });
+    document.querySelector("#editorReassign").addEventListener("click", () => {
+      reassignPayment().catch((error) => {
+        lastUpdated.textContent = error.message;
+      });
+    });
+    document.querySelector("#editorMerge").addEventListener("click", () => {
+      mergeStudents().catch((error) => {
+        lastUpdated.textContent = error.message;
+      });
+    });
+    document.querySelector("#editorClose").addEventListener("click", closeStudentEditor);
+    studentEditor.addEventListener("click", (event) => {
+      if (event.target === studentEditor) closeStudentEditor();
+    });
+
+    async function assignGroup(studentId, groupId) {
+      const response = await fetch(`/api/students/${studentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ group_id: groupId }),
+      });
+      if (!response.ok) {
+        throw new Error("Не удалось назначить группу");
+      }
+      const student = await response.json();
+      studentsById.set(studentId, student);
+    }
+
+    function createGroupSelect(studentId, currentGroupId, groups) {
+      const td = document.createElement("td");
+      if (!studentId) {
+        td.textContent = "—";
+        return td;
+      }
+
+      const select = document.createElement("select");
+      select.className = "inline-select";
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "—";
+      select.appendChild(empty);
+
+      for (const group of groups) {
+        const option = document.createElement("option");
+        option.value = String(group.id);
+        option.textContent = group.name;
+        if (group.id === currentGroupId) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      }
+
+      select.addEventListener("change", () => {
+        const groupId = select.value ? Number(select.value) : null;
+        select.disabled = true;
+        assignGroup(studentId, groupId)
+          .catch((error) => {
+            lastUpdated.textContent = error.message;
+          })
+          .finally(() => {
+            select.disabled = false;
+          });
+      });
+
+      td.appendChild(select);
+      return td;
+    }
+
+    function createStudentCell(payment, reviewInfo) {
+      const td = document.createElement("td");
+      td.className = "col-student";
+      const student = payment.student_id ? studentsById.get(payment.student_id) : null;
+      if (student) {
+        const wrap = document.createElement("div");
+        wrap.className = "student-cell";
+        const name = document.createElement("span");
+        name.className = "student-name";
+        name.textContent = student.full_name;
+        name.title = student.full_name;
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "btn-secondary btn-icon";
+        editBtn.textContent = "Изменить";
+        editBtn.addEventListener("click", () => openStudentEditor(payment, student));
+        wrap.append(name, editBtn);
+        td.appendChild(wrap);
+        return td;
+      }
+      if (payment.status !== "needs_review") {
+        td.textContent = "Не привязан";
+        return td;
+      }
+
+      const select = document.createElement("select");
+      select.className = "inline-select";
+      select.style.width = "100%";
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "Выберите ученика";
+      select.appendChild(empty);
+
+      const candidateIds = reviewInfo?.candidate_student_ids || [];
+      const listed = candidateIds.length
+        ? candidateIds
+            .map((id) => studentsById.get(id))
+            .filter(Boolean)
+        : Array.from(studentsById.values()).filter((item) => item.active);
+
+      for (const item of listed) {
+        const option = document.createElement("option");
+        option.value = String(item.id);
+        option.textContent = item.full_name;
+        select.appendChild(option);
+      }
+
+      select.addEventListener("change", async () => {
+        if (!select.value) return;
+        select.disabled = true;
+        try {
+          const response = await fetch(`/api/payments/${payment.id}/match`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ student_id: Number(select.value) }),
+          });
+          if (!response.ok) {
+            throw new Error("Не удалось привязать платёж");
+          }
+          await loadPayments();
+        } catch (error) {
+          lastUpdated.textContent = error.message;
+          select.disabled = false;
+        }
+      });
+
+      td.appendChild(select);
+      return td;
+    }
+
+    function buildQuery(path, params) {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value === "" || value == null) continue;
+        if (key === "ungrouped") {
+          query.set(key, "true");
+          continue;
+        }
+        query.set(key, value);
+      }
+      const suffix = query.toString();
+      return suffix ? `${path}?${suffix}` : path;
+    }
 
     function formatDate(value) {
       if (!value) return "-";
@@ -256,6 +815,14 @@ def payments_ui() -> str:
       return td;
     }
 
+    function payerCell(value) {
+      const td = document.createElement("td");
+      td.className = "col-payer";
+      td.textContent = value || "-";
+      td.title = value || "";
+      return td;
+    }
+
     function renderStats(payments) {
       const total = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
       document.querySelector("#paymentsCount").textContent = payments.length;
@@ -266,7 +833,7 @@ def payments_ui() -> str:
       document.querySelector("#totalAmount").textContent = total.toFixed(2) + " BYN";
     }
 
-    function renderPayments(payments, studentsById) {
+    function renderPayments(payments, groups, reviewByPaymentId) {
       paymentsBody.replaceChildren();
       emptyState.hidden = payments.length > 0;
 
@@ -279,40 +846,102 @@ def payments_ui() -> str:
         badge.textContent = statusLabels[payment.status] || payment.status || "-";
         status.appendChild(badge);
 
+        const student = payment.student_id ? studentsById.get(payment.student_id) : null;
         row.append(
           cell(String(payment.id)),
           cell(formatDate(payment.paid_at || payment.created_at)),
           status,
           cell(`${payment.amount} ${payment.currency}`, "amount"),
-          cell(payment.payer_full_name),
-          cell(studentsById.get(payment.student_id) || "Не привязан"),
-          cell(payment.ap_erip_trn_id),
-          cell([payment.ap_erip_invoice_id, payment.ap_erip_service_no].filter(Boolean).join(" / "))
+          seasonCell(payment.season),
+          createPaymentForSelect(payment),
+          payerCell(payment.payer_full_name),
+          createStudentCell(payment, reviewByPaymentId.get(payment.id)),
+          createGroupSelect(
+            payment.student_id,
+            student?.group_id ?? null,
+            groups
+          )
         );
         paymentsBody.appendChild(row);
       }
     }
 
-    async function loadPayments() {
-      const status = statusFilter.value;
-      const paymentsUrl = status
-        ? `/api/payments?status=${encodeURIComponent(status)}`
-        : "/api/payments";
-      const [paymentsResponse, studentsResponse] = await Promise.all([
-        fetch(paymentsUrl),
-        fetch("/api/students")
-      ]);
+    function renderMonthReport(months) {
+      monthsBody.replaceChildren();
+      monthsEmpty.hidden = months.length > 0;
+      for (const item of months) {
+        const row = document.createElement("tr");
+        row.append(
+          cell(item.month),
+          cell(String(item.payments_count)),
+          cell(`${item.total_amount} BYN`, "amount")
+        );
+        monthsBody.appendChild(row);
+      }
+    }
 
-      if (!paymentsResponse.ok || !studentsResponse.ok) {
+    function renderStudentReport(rows) {
+      studentsBody.replaceChildren();
+      studentsEmpty.hidden = rows.length > 0;
+      for (const item of rows) {
+        const row = document.createElement("tr");
+        row.append(
+          cell(item.student_full_name),
+          cell(item.group_name || "—"),
+          cell(String(item.payments_count)),
+          cell(`${item.total_amount} BYN`, "amount")
+        );
+        studentsBody.appendChild(row);
+      }
+    }
+
+    async function loadPayments() {
+      const season = seasonFilter.value;
+      const periodOptions = await loadPaymentForOptions(season || null);
+      fillPaymentForFilterOptions(periodOptions);
+      const paymentsUrl = buildQuery("/api/payments", {
+        status: statusFilter.value,
+        season,
+        payment_for: paymentForFilter.value,
+        ungrouped: groupFilter.value === "ungrouped" ? "1" : "",
+      });
+      const reportParams = { season };
+      const responses = await Promise.all([
+        fetch(paymentsUrl),
+        fetch("/api/students"),
+        fetch("/api/groups"),
+        fetch("/api/reports/needs-review"),
+        fetch(buildQuery("/api/reports/by-month", reportParams)),
+        fetch(buildQuery("/api/reports/by-student", reportParams)),
+      ]);
+      const [
+        paymentsResponse,
+        studentsResponse,
+        groupsResponse,
+        reviewResponse,
+        monthResponse,
+        byStudentResponse,
+      ] = responses;
+
+      if (!paymentsResponse.ok || !studentsResponse.ok || !groupsResponse.ok) {
         throw new Error("Не удалось загрузить данные");
       }
 
       const payments = await paymentsResponse.json();
       const students = await studentsResponse.json();
-      const studentsById = new Map(students.map((student) => [student.id, student.full_name]));
+      const groups = await groupsResponse.json();
+      const reviewItems = reviewResponse.ok ? await reviewResponse.json() : [];
+      const months = monthResponse.ok ? await monthResponse.json() : [];
+      const byStudent = byStudentResponse.ok ? await byStudentResponse.json() : [];
+      studentsById = new Map(students.map((student) => [student.id, student]));
+      const reviewByPaymentId = new Map(
+        reviewItems.map((item) => [item.payment_id, item])
+      );
 
       renderStats(payments);
-      renderPayments(payments, studentsById);
+      renderPayments(payments, groups, reviewByPaymentId);
+      renderMonthReport(months);
+      renderStudentReport(byStudent);
       lastUpdated.textContent = "Обновлено: " + formatDate(new Date().toISOString());
     }
 
@@ -326,8 +955,407 @@ def payments_ui() -> str:
         lastUpdated.textContent = error.message;
       });
     });
+    seasonFilter.addEventListener("change", () => {
+      paymentForFilter.value = "";
+      loadPayments().catch((error) => {
+        lastUpdated.textContent = error.message;
+      });
+    });
+    paymentForFilter.addEventListener("change", () => {
+      loadPayments().catch((error) => {
+        lastUpdated.textContent = error.message;
+      });
+    });
+    groupFilter.addEventListener("change", () => {
+      loadPayments().catch((error) => {
+        lastUpdated.textContent = error.message;
+      });
+    });
 
     loadPayments().catch((error) => {
+      lastUpdated.textContent = error.message;
+    });
+  </script>
+</body>
+</html>
+"""
+
+
+@router.get("/groups-ui", response_class=HTMLResponse, include_in_schema=False)
+def groups_ui() -> str:
+    return """
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MetPay - группы</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #697386;
+      --line: #d9deea;
+      --accent: #2457d6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --card: #182235;
+        --text: #e7ecf5;
+        --muted: #9aa8bd;
+        --line: #2c3950;
+        --accent: #7aa2ff;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 20px;
+    }
+    .muted { color: var(--muted); }
+    .app-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .app-nav a {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .app-nav a.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    button {
+      cursor: pointer;
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      background: color-mix(in srgb, var(--card), var(--bg) 35%);
+    }
+    .badge {
+      display: inline-flex;
+      border-radius: 999px;
+      padding: 4px 9px;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      font-weight: 600;
+    }
+    .empty {
+      padding: 32px;
+      text-align: center;
+      color: var(--muted);
+    }
+    .group-card {
+      border-bottom: 1px solid var(--line);
+      padding: 16px 18px;
+    }
+    .group-card:last-child { border-bottom: none; }
+    .group-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .group-head h2 {
+      margin: 0;
+      font-size: 1.15rem;
+    }
+    .group-meta {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .student-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .student-link {
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .student-link:hover {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent), transparent 90%);
+    }
+    .students-empty {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      z-index: 20;
+    }
+    .modal[hidden] { display: none; }
+    .modal-card {
+      width: min(720px, 100%);
+      max-height: 85vh;
+      overflow: auto;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+    }
+    .modal-card h3 { margin: 0 0 6px; }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+    button.btn-secondary {
+      background: var(--card);
+      color: var(--text);
+      border-color: var(--line);
+      font-weight: 500;
+    }
+    .amount { font-weight: 700; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <main>
+    <nav class="app-nav" aria-label="Разделы">
+      <a href="/payments-ui">Платежи</a>
+      <a href="/groups-ui" class="active">Группы</a>
+    </nav>
+    <header>
+      <div>
+        <h1>Группы</h1>
+        <div class="muted">Когорты по году рождения. Нажмите на ФИО — история платежей.</div>
+      </div>
+      <button type="button" id="refresh">Обновить</button>
+    </header>
+    <section class="panel">
+      <div id="groupsList"></div>
+      <div class="empty" id="emptyState" hidden>Группы не найдены</div>
+      <div class="muted" id="lastUpdated" style="padding: 12px 18px;">Еще не обновлялось</div>
+    </section>
+  </main>
+
+  <div id="paymentsModal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-labelledby="paymentsModalTitle">
+      <h3 id="paymentsModalTitle">Платежи ученика</h3>
+      <p class="muted" id="paymentsModalSummary"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Сумма</th>
+              <th>ФИО из платежа</th>
+              <th>Сезон</th>
+            </tr>
+          </thead>
+          <tbody id="paymentsModalBody"></tbody>
+        </table>
+        <div class="empty" id="paymentsModalEmpty" hidden>Платежей пока нет</div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="paymentsModalClose" class="btn-secondary">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const groupsList = document.querySelector("#groupsList");
+    const emptyState = document.querySelector("#emptyState");
+    const lastUpdated = document.querySelector("#lastUpdated");
+    const paymentsModal = document.querySelector("#paymentsModal");
+    const paymentsModalTitle = document.querySelector("#paymentsModalTitle");
+    const paymentsModalSummary = document.querySelector("#paymentsModalSummary");
+    const paymentsModalBody = document.querySelector("#paymentsModalBody");
+    const paymentsModalEmpty = document.querySelector("#paymentsModalEmpty");
+
+    function formatDate(value) {
+      if (!value) return "-";
+      return new Intl.DateTimeFormat("ru-RU", {
+        dateStyle: "short",
+        timeStyle: "short"
+      }).format(new Date(value));
+    }
+
+    function closePaymentsModal() {
+      paymentsModal.hidden = true;
+    }
+
+    async function openStudentPayments(student) {
+      const response = await fetch(`/api/payments?student_id=${student.id}`);
+      if (!response.ok) throw new Error("Не удалось загрузить платежи");
+      const payments = await response.json();
+      paymentsModalTitle.textContent = student.full_name;
+      const total = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+      paymentsModalSummary.textContent =
+        `${payments.length} платеж(ей) · всего ${total.toFixed(2)} BYN` +
+        (student.group_name ? ` · группа ${student.group_name}` : "");
+      paymentsModalBody.replaceChildren();
+      paymentsModalEmpty.hidden = payments.length > 0;
+      for (const payment of payments) {
+        const row = document.createElement("tr");
+        row.append(
+          Object.assign(document.createElement("td"), {
+            textContent: formatDate(payment.paid_at || payment.created_at)
+          }),
+          Object.assign(document.createElement("td"), {
+            textContent: `${payment.amount} ${payment.currency}`,
+            className: "amount"
+          }),
+          Object.assign(document.createElement("td"), {
+            textContent: payment.payer_full_name || "-"
+          }),
+          Object.assign(document.createElement("td"), { textContent: payment.season || "-" })
+        );
+        paymentsModalBody.appendChild(row);
+      }
+      paymentsModal.hidden = false;
+    }
+
+    function renderGroups(groups, students) {
+      groupsList.replaceChildren();
+      emptyState.hidden = groups.length > 0;
+      const byGroup = new Map();
+      for (const student of students) {
+        if (!student.active || !student.group_id) continue;
+        if (!byGroup.has(student.group_id)) byGroup.set(student.group_id, []);
+        byGroup.get(student.group_id).push(student);
+      }
+      for (const group of groups) {
+        const card = document.createElement("article");
+        card.className = "group-card";
+        const head = document.createElement("div");
+        head.className = "group-head";
+        const title = document.createElement("h2");
+        title.textContent = group.name;
+        const meta = document.createElement("div");
+        meta.className = "group-meta";
+        const groupStudents = (byGroup.get(group.id) || []).sort((a, b) =>
+          a.full_name.localeCompare(b.full_name, "ru")
+        );
+        meta.textContent =
+          `${group.monthly_fee} BYN/мес · ${groupStudents.length} ученик(ов)` +
+          (group.active ? "" : " · неактивна");
+        head.append(title, meta);
+        card.appendChild(head);
+
+        if (!groupStudents.length) {
+          const empty = document.createElement("div");
+          empty.className = "students-empty";
+          empty.textContent = "Нет привязанных учеников";
+          card.appendChild(empty);
+        } else {
+          const list = document.createElement("ul");
+          list.className = "student-list";
+          for (const student of groupStudents) {
+            const item = document.createElement("li");
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "student-link";
+            button.textContent = student.full_name;
+            button.title = "История платежей";
+            button.addEventListener("click", () => {
+              openStudentPayments(student).catch((error) => {
+                lastUpdated.textContent = error.message;
+              });
+            });
+            item.appendChild(button);
+            list.appendChild(item);
+          }
+          card.appendChild(list);
+        }
+        groupsList.appendChild(card);
+      }
+    }
+
+    async function loadGroups() {
+      const [groupsResponse, studentsResponse] = await Promise.all([
+        fetch("/api/groups"),
+        fetch("/api/students"),
+      ]);
+      if (!groupsResponse.ok || !studentsResponse.ok) {
+        throw new Error("Не удалось загрузить данные");
+      }
+      const groups = await groupsResponse.json();
+      const students = await studentsResponse.json();
+      renderGroups(groups, students);
+      lastUpdated.textContent = "Обновлено: " + formatDate(new Date().toISOString());
+    }
+
+    document.querySelector("#refresh").addEventListener("click", () => {
+      loadGroups().catch((error) => {
+        lastUpdated.textContent = error.message;
+      });
+    });
+    document.querySelector("#paymentsModalClose").addEventListener("click", closePaymentsModal);
+    paymentsModal.addEventListener("click", (event) => {
+      if (event.target === paymentsModal) closePaymentsModal();
+    });
+    loadGroups().catch((error) => {
       lastUpdated.textContent = error.message;
     });
   </script>

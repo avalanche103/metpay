@@ -5,7 +5,9 @@ from fastapi import FastAPI
 
 from app.api import groups, payments, reports, students, ui, webhooks_artpay
 from app.config import get_settings
-from app.db import create_db_and_tables
+from app.db import SessionLocal, create_db_and_tables
+from app.migrations import run_migrations
+from app.services.default_groups import ensure_default_groups
 
 settings = get_settings()
 
@@ -13,6 +15,12 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     create_db_and_tables()
+    run_migrations()
+    db = SessionLocal()
+    try:
+        ensure_default_groups(db)
+    finally:
+        db.close()
     yield
 
 

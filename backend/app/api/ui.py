@@ -145,12 +145,18 @@ def payments_ui() -> str:
       gap: 6px;
       width: 100%;
     }
-    .student-cell .student-name {
+    .student-cell .student-link {
       flex: 1;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .student-cell .student-link:hover {
+      text-decoration: underline;
     }
     .btn-icon {
       flex-shrink: 0;
@@ -216,6 +222,32 @@ def payments_ui() -> str:
       overflow-x: auto;
       max-width: 100%;
       -webkit-overflow-scrolling: touch;
+    }
+    .payments-table-wrap {
+      border-top: 1px solid var(--line);
+    }
+    th.sortable {
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    th.sortable:hover {
+      color: var(--text);
+    }
+    th.sortable::after {
+      content: "↕";
+      display: inline-block;
+      margin-left: 5px;
+      font-size: 11px;
+      opacity: 0.35;
+    }
+    th.sortable.sorted-asc::after {
+      content: "↑";
+      opacity: 1;
+    }
+    th.sortable.sorted-desc::after {
+      content: "↓";
+      opacity: 1;
     }
     .payments-table-wrap {
       border-top: 1px solid var(--line);
@@ -340,56 +372,21 @@ def payments_ui() -> str:
 
     <section class="panel">
       <div class="toolbar">
-        <div class="filters-scroll">
-          <div class="filters">
-          <div class="filter-field filter-field-wide">
-            <label for="seasonFilter" class="muted">Сезон</label>
-            <select id="seasonFilter">
-              <option value="">Все</option>
-              <option value="2025/2026" selected>2025/2026</option>
-            </select>
-          </div>
-          <div class="filter-field filter-field-wide">
-            <label for="paymentForFilter" class="muted">Оплата</label>
-            <select id="paymentForFilter">
-              <option value="">Все</option>
-            </select>
-          </div>
-          <div class="filter-field">
-            <label for="statusFilter" class="muted">Статус</label>
-            <select id="statusFilter">
-              <option value="">Все</option>
-              <option value="matched">Привязано</option>
-              <option value="needs_review">На проверке</option>
-              <option value="received">Получено</option>
-              <option value="ignored">Игнорировано</option>
-              <option value="duplicate">Дубликат</option>
-            </select>
-          </div>
-          <div class="filter-field">
-            <label for="groupFilter" class="muted">Группа</label>
-            <select id="groupFilter">
-              <option value="">Все</option>
-              <option value="ungrouped">Без группы</option>
-            </select>
-          </div>
-          </div>
-        </div>
         <div class="muted" id="lastUpdated">Еще не обновлялось</div>
       </div>
       <div class="table-wrap payments-table-wrap">
         <table>
           <thead>
             <tr>
-              <th>ID</th>
-              <th>Дата</th>
-              <th>Статус</th>
-              <th>Сумма</th>
-              <th class="col-season">Сезон</th>
-              <th class="col-payment-for">Оплата</th>
-              <th>ФИО из платежа</th>
-              <th class="col-student">Ученик</th>
-              <th>Группа</th>
+              <th class="sortable" data-sort="id">ID</th>
+              <th class="sortable" data-sort="date">Дата</th>
+              <th class="sortable" data-sort="status">Статус</th>
+              <th class="sortable" data-sort="amount">Сумма</th>
+              <th class="sortable col-season" data-sort="season">Сезон</th>
+              <th class="sortable col-payment-for" data-sort="payment_for">Оплата</th>
+              <th class="sortable" data-sort="payer">ФИО из платежа</th>
+              <th class="sortable col-student" data-sort="student">Ученик</th>
+              <th class="sortable" data-sort="group">Группа</th>
             </tr>
           </thead>
           <tbody id="paymentsBody"></tbody>
@@ -462,10 +459,6 @@ def payments_ui() -> str:
   </div>
 
   <script>
-    const statusFilter = document.querySelector("#statusFilter");
-    const seasonFilter = document.querySelector("#seasonFilter");
-    const paymentForFilter = document.querySelector("#paymentForFilter");
-    const groupFilter = document.querySelector("#groupFilter");
     const paymentsBody = document.querySelector("#paymentsBody");
     const monthsBody = document.querySelector("#monthsBody");
     const studentsBody = document.querySelector("#studentsBody");
@@ -482,27 +475,89 @@ def payments_ui() -> str:
       duplicate: "Дубликат"
     };
 
+    const REPORT_SEASON = "2025/2026";
+
     let studentsById = new Map();
     let editorContext = null;
     let paymentForOptions = [];
     let paymentForLabels = new Map();
+    let cachedPayments = [];
+    let cachedGroups = [];
+    let cachedReviewByPaymentId = new Map();
+    let sortColumn = "date";
+    let sortDirection = "desc";
 
-    function fillPaymentForFilterOptions(options, selectedValue) {
-      paymentForOptions = options;
-      paymentForLabels = new Map(options.map((item) => [item.value, item.label]));
-      const current = selectedValue ?? paymentForFilter.value;
-      paymentForFilter.replaceChildren();
-      const empty = document.createElement("option");
-      empty.value = "";
-      empty.textContent = "Все";
-      paymentForFilter.appendChild(empty);
-      for (const item of options) {
-        const option = document.createElement("option");
-        option.value = item.value;
-        option.textContent = item.label;
-        paymentForFilter.appendChild(option);
+    function compareSortValues(left, right) {
+      if (left == null && right == null) return 0;
+      if (left == null || left === "") return -1;
+      if (right == null || right === "") return 1;
+      if (typeof left === "number" && typeof right === "number") {
+        return left - right;
       }
-      paymentForFilter.value = current;
+      return String(left).localeCompare(String(right), "ru", {
+        numeric: true,
+        sensitivity: "base",
+      });
+    }
+
+    function paymentSortValue(payment, key, groupsById) {
+      switch (key) {
+        case "id":
+          return payment.id;
+        case "date": {
+          const raw = payment.paid_at || payment.created_at;
+          return raw ? new Date(raw).getTime() : 0;
+        }
+        case "status":
+          return statusLabels[payment.status] || payment.status || "";
+        case "amount":
+          return Number(payment.amount || 0);
+        case "season":
+          return payment.season || "";
+        case "payment_for":
+          return paymentForLabels.get(payment.payment_for) || payment.payment_for || "";
+        case "payer":
+          return payment.payer_full_name || "";
+        case "student": {
+          const student = payment.student_id ? studentsById.get(payment.student_id) : null;
+          return student?.full_name || "";
+        }
+        case "group": {
+          const student = payment.student_id ? studentsById.get(payment.student_id) : null;
+          if (!student?.group_id) return "";
+          return groupsById.get(student.group_id)?.name || "";
+        }
+        default:
+          return "";
+      }
+    }
+
+    function sortPayments(payments, groups) {
+      const groupsById = new Map(groups.map((group) => [group.id, group]));
+      const direction = sortDirection === "asc" ? 1 : -1;
+      return [...payments].sort((left, right) => {
+        const cmp = compareSortValues(
+          paymentSortValue(left, sortColumn, groupsById),
+          paymentSortValue(right, sortColumn, groupsById)
+        );
+        if (cmp !== 0) return cmp * direction;
+        return (left.id - right.id) * direction;
+      });
+    }
+
+    function updateSortHeaders() {
+      for (const header of document.querySelectorAll("th.sortable")) {
+        header.classList.remove("sorted-asc", "sorted-desc");
+        if (header.dataset.sort === sortColumn) {
+          header.classList.add(sortDirection === "asc" ? "sorted-asc" : "sorted-desc");
+        }
+      }
+    }
+
+    function applySortAndRender() {
+      const sorted = sortPayments(cachedPayments, cachedGroups);
+      renderStats(cachedPayments);
+      renderPayments(sorted, cachedGroups, cachedReviewByPaymentId);
     }
 
     async function loadPaymentForOptions(season) {
@@ -723,16 +778,17 @@ def payments_ui() -> str:
       if (student) {
         const wrap = document.createElement("div");
         wrap.className = "student-cell";
-        const name = document.createElement("span");
-        name.className = "student-name";
-        name.textContent = student.full_name;
-        name.title = student.full_name;
+        const link = document.createElement("a");
+        link.className = "student-link";
+        link.href = `/students-ui/${student.id}`;
+        link.textContent = student.full_name;
+        link.title = "Все платежи ученика";
         const editBtn = document.createElement("button");
         editBtn.type = "button";
         editBtn.className = "btn-secondary btn-icon";
         editBtn.textContent = "Изменить";
         editBtn.addEventListener("click", () => openStudentEditor(payment, student));
-        wrap.append(name, editBtn);
+        wrap.append(link, editBtn);
         td.appendChild(wrap);
         return td;
       }
@@ -896,18 +952,12 @@ def payments_ui() -> str:
     }
 
     async function loadPayments() {
-      const season = seasonFilter.value;
-      const periodOptions = await loadPaymentForOptions(season || null);
-      fillPaymentForFilterOptions(periodOptions);
-      const paymentsUrl = buildQuery("/api/payments", {
-        status: statusFilter.value,
-        season,
-        payment_for: paymentForFilter.value,
-        ungrouped: groupFilter.value === "ungrouped" ? "1" : "",
-      });
-      const reportParams = { season };
+      const periodOptions = await loadPaymentForOptions(null);
+      paymentForOptions = periodOptions;
+      paymentForLabels = new Map(periodOptions.map((item) => [item.value, item.label]));
+      const reportParams = { season: REPORT_SEASON };
       const responses = await Promise.all([
-        fetch(paymentsUrl),
+        fetch("/api/payments"),
         fetch("/api/students"),
         fetch("/api/groups"),
         fetch("/api/reports/needs-review"),
@@ -934,12 +984,14 @@ def payments_ui() -> str:
       const months = monthResponse.ok ? await monthResponse.json() : [];
       const byStudent = byStudentResponse.ok ? await byStudentResponse.json() : [];
       studentsById = new Map(students.map((student) => [student.id, student]));
-      const reviewByPaymentId = new Map(
+      cachedPayments = payments;
+      cachedGroups = groups;
+      cachedReviewByPaymentId = new Map(
         reviewItems.map((item) => [item.payment_id, item])
       );
 
-      renderStats(payments);
-      renderPayments(payments, groups, reviewByPaymentId);
+      updateSortHeaders();
+      applySortAndRender();
       renderMonthReport(months);
       renderStudentReport(byStudent);
       lastUpdated.textContent = "Обновлено: " + formatDate(new Date().toISOString());
@@ -950,29 +1002,317 @@ def payments_ui() -> str:
         lastUpdated.textContent = error.message;
       });
     });
-    statusFilter.addEventListener("change", () => {
-      loadPayments().catch((error) => {
-        lastUpdated.textContent = error.message;
+    for (const header of document.querySelectorAll("th.sortable")) {
+      header.addEventListener("click", () => {
+        const key = header.dataset.sort;
+        if (sortColumn === key) {
+          sortDirection = sortDirection === "asc" ? "desc" : "asc";
+        } else {
+          sortColumn = key;
+          sortDirection = "asc";
+        }
+        updateSortHeaders();
+        applySortAndRender();
       });
-    });
-    seasonFilter.addEventListener("change", () => {
-      paymentForFilter.value = "";
-      loadPayments().catch((error) => {
-        lastUpdated.textContent = error.message;
-      });
-    });
-    paymentForFilter.addEventListener("change", () => {
-      loadPayments().catch((error) => {
-        lastUpdated.textContent = error.message;
-      });
-    });
-    groupFilter.addEventListener("change", () => {
-      loadPayments().catch((error) => {
-        lastUpdated.textContent = error.message;
-      });
-    });
+    }
 
     loadPayments().catch((error) => {
+      lastUpdated.textContent = error.message;
+    });
+  </script>
+</body>
+</html>
+"""
+
+
+@router.get("/students-ui/{student_id}", response_class=HTMLResponse, include_in_schema=False)
+def student_payments_ui(student_id: int) -> str:
+    return """
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MetPay - платежи ученика</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #697386;
+      --line: #d9deea;
+      --accent: #2457d6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111827;
+        --card: #182235;
+        --text: #e7ecf5;
+        --muted: #9aa8bd;
+        --line: #2c3950;
+        --accent: #7aa2ff;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 20px;
+    }
+    .muted { color: var(--muted); }
+    .app-nav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .app-nav a {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .app-nav a.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    button {
+      cursor: pointer;
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 600;
+    }
+    button.btn-secondary {
+      background: var(--card);
+      color: var(--text);
+      border-color: var(--line);
+      font-weight: 500;
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+    }
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 640px;
+    }
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      background: color-mix(in srgb, var(--card), var(--bg) 35%);
+    }
+    select {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 6px 8px;
+      background: var(--card);
+      color: var(--text);
+      font: inherit;
+      font-size: 13px;
+      min-width: 132px;
+    }
+    .amount { font-weight: 700; white-space: nowrap; }
+    .empty {
+      padding: 32px;
+      text-align: center;
+      color: var(--muted);
+    }
+    .toolbar {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <nav class="app-nav" aria-label="Разделы">
+      <a href="/payments-ui">Платежи</a>
+      <a href="/groups-ui">Группы</a>
+    </nav>
+    <header>
+      <div>
+        <h1 id="studentTitle">Платежи ученика</h1>
+        <div class="muted" id="studentSummary">Загрузка…</div>
+      </div>
+      <button type="button" id="refresh">Обновить</button>
+    </header>
+    <section class="panel">
+      <div class="toolbar muted" id="lastUpdated">Еще не обновлялось</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Сумма</th>
+              <th>ФИО из платежа</th>
+              <th>Сезон</th>
+              <th>Оплата</th>
+            </tr>
+          </thead>
+          <tbody id="paymentsBody"></tbody>
+        </table>
+        <div class="empty" id="emptyState" hidden>Платежей пока нет</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const studentId = Number(window.location.pathname.split("/").pop());
+    const studentTitle = document.querySelector("#studentTitle");
+    const studentSummary = document.querySelector("#studentSummary");
+    const paymentsBody = document.querySelector("#paymentsBody");
+    const emptyState = document.querySelector("#emptyState");
+    const lastUpdated = document.querySelector("#lastUpdated");
+    const paymentForOptionsBySeason = new Map();
+
+    function formatDate(value) {
+      if (!value) return "-";
+      return new Intl.DateTimeFormat("ru-RU", {
+        dateStyle: "short",
+        timeStyle: "short"
+      }).format(new Date(value));
+    }
+
+    async function loadPaymentForOptions(season) {
+      const key = season || "";
+      if (paymentForOptionsBySeason.has(key)) {
+        return paymentForOptionsBySeason.get(key);
+      }
+      const url = season
+        ? `/api/payments/payment-for-options?season=${encodeURIComponent(season)}`
+        : "/api/payments/payment-for-options";
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Не удалось загрузить периоды оплаты");
+      const options = await response.json();
+      paymentForOptionsBySeason.set(key, options);
+      return options;
+    }
+
+    function createPaymentForSelect(payment, options) {
+      const td = document.createElement("td");
+      const select = document.createElement("select");
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "—";
+      select.appendChild(empty);
+      for (const item of options) {
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label;
+        if (payment.payment_for === item.value) option.selected = true;
+        select.appendChild(option);
+      }
+      select.addEventListener("change", () => {
+        const paymentFor = select.value || null;
+        select.disabled = true;
+        fetch(`/api/payments/${payment.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ payment_for: paymentFor }),
+        })
+          .then((response) => {
+            if (!response.ok) throw new Error("Не удалось сохранить период оплаты");
+            payment.payment_for = paymentFor;
+          })
+          .catch((error) => {
+            lastUpdated.textContent = error.message;
+            select.value = payment.payment_for || "";
+          })
+          .finally(() => {
+            select.disabled = false;
+          });
+      });
+      td.appendChild(select);
+      return td;
+    }
+
+    async function renderPayments(payments) {
+      paymentsBody.replaceChildren();
+      emptyState.hidden = payments.length > 0;
+      for (const payment of payments) {
+        const options = await loadPaymentForOptions(payment.season || null);
+        const row = document.createElement("tr");
+        row.append(
+          Object.assign(document.createElement("td"), {
+            textContent: formatDate(payment.paid_at || payment.created_at)
+          }),
+          Object.assign(document.createElement("td"), {
+            textContent: `${payment.amount} ${payment.currency}`,
+            className: "amount"
+          }),
+          Object.assign(document.createElement("td"), {
+            textContent: payment.payer_full_name || "-"
+          }),
+          Object.assign(document.createElement("td"), { textContent: payment.season || "-" }),
+          createPaymentForSelect(payment, options)
+        );
+        paymentsBody.appendChild(row);
+      }
+    }
+
+    async function loadStudentPayments() {
+      if (!Number.isFinite(studentId)) {
+        throw new Error("Некорректный идентификатор ученика");
+      }
+      const [studentResponse, paymentsResponse] = await Promise.all([
+        fetch(`/api/students/${studentId}`),
+        fetch(`/api/payments?student_id=${studentId}`),
+      ]);
+      if (!studentResponse.ok) throw new Error("Ученик не найден");
+      if (!paymentsResponse.ok) throw new Error("Не удалось загрузить платежи");
+      const student = await studentResponse.json();
+      const payments = await paymentsResponse.json();
+      studentTitle.textContent = student.full_name;
+      const total = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      studentSummary.textContent =
+        `${payments.length} платеж(ей) · всего ${total.toFixed(2)} BYN` +
+        (student.group_name ? ` · группа ${student.group_name}` : "");
+      await renderPayments(payments);
+      lastUpdated.textContent = "Обновлено: " + formatDate(new Date().toISOString());
+    }
+
+    document.querySelector("#refresh").addEventListener("click", () => {
+      loadStudentPayments().catch((error) => {
+        lastUpdated.textContent = error.message;
+      });
+    });
+    loadStudentPayments().catch((error) => {
       lastUpdated.textContent = error.message;
     });
   </script>
@@ -1128,13 +1468,16 @@ def groups_ui() -> str:
       list-style: none;
     }
     .student-link {
+      display: inline-flex;
+      align-items: center;
       border: 1px solid var(--line);
       background: var(--bg);
       color: var(--accent);
       border-radius: 999px;
       padding: 6px 12px;
       font: inherit;
-      cursor: pointer;
+      text-decoration: none;
+      font-weight: 500;
     }
     .student-link:hover {
       border-color: var(--accent);
@@ -1199,39 +1542,10 @@ def groups_ui() -> str:
     </section>
   </main>
 
-  <div id="paymentsModal" class="modal" hidden>
-    <div class="modal-card" role="dialog" aria-labelledby="paymentsModalTitle">
-      <h3 id="paymentsModalTitle">Платежи ученика</h3>
-      <p class="muted" id="paymentsModalSummary"></p>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Дата</th>
-              <th>Сумма</th>
-              <th>ФИО из платежа</th>
-              <th>Сезон</th>
-            </tr>
-          </thead>
-          <tbody id="paymentsModalBody"></tbody>
-        </table>
-        <div class="empty" id="paymentsModalEmpty" hidden>Платежей пока нет</div>
-      </div>
-      <div class="modal-actions">
-        <button type="button" id="paymentsModalClose" class="btn-secondary">Закрыть</button>
-      </div>
-    </div>
-  </div>
-
   <script>
     const groupsList = document.querySelector("#groupsList");
     const emptyState = document.querySelector("#emptyState");
     const lastUpdated = document.querySelector("#lastUpdated");
-    const paymentsModal = document.querySelector("#paymentsModal");
-    const paymentsModalTitle = document.querySelector("#paymentsModalTitle");
-    const paymentsModalSummary = document.querySelector("#paymentsModalSummary");
-    const paymentsModalBody = document.querySelector("#paymentsModalBody");
-    const paymentsModalEmpty = document.querySelector("#paymentsModalEmpty");
 
     function formatDate(value) {
       if (!value) return "-";
@@ -1239,41 +1553,6 @@ def groups_ui() -> str:
         dateStyle: "short",
         timeStyle: "short"
       }).format(new Date(value));
-    }
-
-    function closePaymentsModal() {
-      paymentsModal.hidden = true;
-    }
-
-    async function openStudentPayments(student) {
-      const response = await fetch(`/api/payments?student_id=${student.id}`);
-      if (!response.ok) throw new Error("Не удалось загрузить платежи");
-      const payments = await response.json();
-      paymentsModalTitle.textContent = student.full_name;
-      const total = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      paymentsModalSummary.textContent =
-        `${payments.length} платеж(ей) · всего ${total.toFixed(2)} BYN` +
-        (student.group_name ? ` · группа ${student.group_name}` : "");
-      paymentsModalBody.replaceChildren();
-      paymentsModalEmpty.hidden = payments.length > 0;
-      for (const payment of payments) {
-        const row = document.createElement("tr");
-        row.append(
-          Object.assign(document.createElement("td"), {
-            textContent: formatDate(payment.paid_at || payment.created_at)
-          }),
-          Object.assign(document.createElement("td"), {
-            textContent: `${payment.amount} ${payment.currency}`,
-            className: "amount"
-          }),
-          Object.assign(document.createElement("td"), {
-            textContent: payment.payer_full_name || "-"
-          }),
-          Object.assign(document.createElement("td"), { textContent: payment.season || "-" })
-        );
-        paymentsModalBody.appendChild(row);
-      }
-      paymentsModal.hidden = false;
     }
 
     function renderGroups(groups, students) {
@@ -1313,17 +1592,12 @@ def groups_ui() -> str:
           list.className = "student-list";
           for (const student of groupStudents) {
             const item = document.createElement("li");
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "student-link";
-            button.textContent = student.full_name;
-            button.title = "История платежей";
-            button.addEventListener("click", () => {
-              openStudentPayments(student).catch((error) => {
-                lastUpdated.textContent = error.message;
-              });
-            });
-            item.appendChild(button);
+            const link = document.createElement("a");
+            link.className = "student-link";
+            link.href = `/students-ui/${student.id}`;
+            link.textContent = student.full_name;
+            link.title = "История платежей";
+            item.appendChild(link);
             list.appendChild(item);
           }
           card.appendChild(list);
@@ -1350,10 +1624,6 @@ def groups_ui() -> str:
       loadGroups().catch((error) => {
         lastUpdated.textContent = error.message;
       });
-    });
-    document.querySelector("#paymentsModalClose").addEventListener("click", closePaymentsModal);
-    paymentsModal.addEventListener("click", (event) => {
-      if (event.target === paymentsModal) closePaymentsModal();
     });
     loadGroups().catch((error) => {
       lastUpdated.textContent = error.message;

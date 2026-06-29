@@ -10,8 +10,20 @@ def test_payments_ui_loads(client: TestClient) -> None:
     assert "Группа" in response.text
     assert "Изменить" in response.text
     assert "/groups-ui" in response.text
-    assert "Без группы" in response.text
     assert "Оплата" in response.text
+    assert 'data-sort="student"' in response.text
+    assert 'class="sortable"' in response.text
+    assert "/students-ui/" in response.text
+
+
+def test_student_payments_ui_loads(client: TestClient) -> None:
+    student = client.post("/api/students", json={"full_name": "Ссылочный Ученик"}).json()
+    response = client.get(f"/students-ui/{student['id']}")
+
+    assert response.status_code == 200
+    assert "Оплата" in response.text
+    assert "/api/payments/payment-for-options" in response.text
+    assert "/api/students/" in response.text
 
 
 def test_groups_ui_loads(client: TestClient) -> None:
@@ -20,7 +32,7 @@ def test_groups_ui_loads(client: TestClient) -> None:
     assert response.status_code == 200
     assert "Группы" in response.text
     assert "/api/groups" in response.text
-    assert "/api/payments?student_id=" in response.text
+    assert "/students-ui/" in response.text
     assert "student-link" in response.text
     assert "/payments-ui" in response.text
 

@@ -1,6 +1,8 @@
 @echo off
 setlocal
 
+set METPAY_PORT=8001
+
 cd /d "%~dp0"
 
 if not exist "backend" (
@@ -39,8 +41,8 @@ if errorlevel 1 (
 )
 
 echo Starting MetPay...
-echo Open http://127.0.0.1:8000/payments-ui
-start "" "http://127.0.0.1:8000/payments-ui"
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+echo Open http://127.0.0.1:%METPAY_PORT%/payments-ui
+start "" "http://127.0.0.1:%METPAY_PORT%/payments-ui"
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port %METPAY_PORT%
 
 endlocal

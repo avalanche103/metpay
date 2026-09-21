@@ -5,7 +5,11 @@ from sqlalchemy.orm import Session, selectinload
 from app.db import get_db
 from app.models import Group, Parent, Student
 from app.schemas import StudentCreate, StudentMergeRequest, StudentRead, StudentUpdate
-from app.services.payment_matching import format_full_name, normalize_full_name
+from app.services.payment_matching import (
+    find_active_duplicate,
+    format_full_name,
+    normalize_full_name,
+)
 from app.services.students import merge_students
 
 router = APIRouter(prefix="/students", tags=["students"])
@@ -26,6 +30,19 @@ def student_to_read(student: Student) -> StudentRead:
 @router.post("", response_model=StudentRead, status_code=status.HTTP_201_CREATED)
 def create_student(payload: StudentCreate, db: Session = Depends(get_db)) -> StudentRead:
     formatted_name = format_full_name(payload.full_name)
+    if not formatted_name:
+        raise HTTPException(status_code=422, detail="full_name cannot be empty")
+
+    duplicate = find_active_duplicate(db, formatted_name)
+    if duplicate:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Ученик уже существует: {duplicate.full_name} "
+                f"(id={duplicate.id}). Используйте существующего или объедините записи."
+            ),
+        )
+
     student = Student(
         full_name=formatted_name,
         normalized_full_name=normalize_full_name(formatted_name),
@@ -82,6 +99,15 @@ def update_student(
         formatted_name = format_full_name(updates["full_name"])
         if not formatted_name:
             raise HTTPException(status_code=422, detail="full_name cannot be empty")
+        duplicate = find_active_duplicate(db, formatted_name, exclude_student_id=student.id)
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Ученик с таким ФИО уже есть: {duplicate.full_name} "
+                    f"(id={duplicate.id}). Объедините записи вместо переименования."
+                ),
+            )
         student.full_name = formatted_name
         student.normalized_full_name = normalize_full_name(formatted_name)
 

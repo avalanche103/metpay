@@ -1,30 +1,31 @@
-from decimal import Decimal
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Group
+from app.models import Group, Student
 
-DEFAULT_GROUPS: list[dict[str, object]] = [
-    {"name": "2012", "monthly_fee": Decimal("120.00")},
-    {"name": "2013", "monthly_fee": Decimal("120.00")},
-    {"name": "2014+", "monthly_fee": Decimal("120.00")},
-]
+# Legacy seed names that should not be auto-created anymore.
+LEGACY_EMPTY_GROUP_NAMES = ("2012", "2013", "2014+")
 
 
 def ensure_default_groups(db: Session) -> list[Group]:
-    groups: list[Group] = []
-    for item in DEFAULT_GROUPS:
-        group = db.scalar(select(Group).where(Group.name == item["name"]))
-        if not group:
-            group = Group(
-                name=str(item["name"]),
-                monthly_fee=item["monthly_fee"],  # type: ignore[arg-type]
-                active=True,
-            )
-            db.add(group)
-        groups.append(group)
+    """Keep startup hook, but do not seed obsolete year cohorts."""
+    removed = remove_empty_legacy_groups(db)
     db.commit()
-    for group in groups:
-        db.refresh(group)
-    return groups
+    return removed
+
+
+def remove_empty_legacy_groups(db: Session) -> list[Group]:
+    """Delete outdated empty groups left from previous seasons."""
+    removed: list[Group] = []
+    for name in LEGACY_EMPTY_GROUP_NAMES:
+        group = db.scalar(select(Group).where(Group.name == name))
+        if not group:
+            continue
+        has_students = db.scalar(
+            select(Student.id).where(Student.group_id == group.id).limit(1)
+        )
+        if has_students is not None:
+            continue
+        removed.append(group)
+        db.delete(group)
+    return removed

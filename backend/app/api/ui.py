@@ -1,6 +1,8 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from app.api.groups_ui_page import GROUPS_UI_HTML
+
 router = APIRouter(tags=["ui"])
 
 
@@ -280,7 +282,16 @@ def payments_ui() -> str:
     }
     th.col-payment-for,
     td.col-payment-for {
-      min-width: 132px;
+      min-width: 190px;
+    }
+    .payment-for-cell {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .payment-for-cell .inline-select {
+      flex: 1;
+      min-width: 110px;
     }
     th {
       color: var(--muted);
@@ -334,6 +345,36 @@ def payments_ui() -> str:
       margin: 0 0 12px;
       font-size: 1.1rem;
     }
+    .import-panel {
+      display: grid;
+      gap: 12px;
+    }
+    .import-panel textarea {
+      width: 100%;
+      min-height: 140px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      font: inherit;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.45;
+      background: #fff;
+      color: var(--text);
+    }
+    .import-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .import-result {
+      font-size: 14px;
+    }
+    .import-result.error {
+      color: #b91c1c;
+    }
     @media (max-width: 760px) {
       header, .toolbar { align-items: stretch; flex-direction: column; }
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -368,6 +409,24 @@ def payments_ui() -> str:
         <strong id="reviewCount">0</strong>
       </div>
       <div class="stat"><span class="muted">Сумма</span><strong id="totalAmount">0.00</strong></div>
+    </section>
+
+    <section class="panel import-panel" aria-label="Импорт из буфера">
+      <h2 class="section-title">Импорт платежей из буфера</h2>
+      <div class="muted">
+        Скопируйте таблицу из ArtPay (дата, № заказа/ФИО, сумма…) и вставьте ниже.
+        Уже загруженные платежи пропускаются как дубли.
+      </div>
+      <textarea
+        id="clipboardImportText"
+        placeholder="20.09.2026 19:06:56&#9;Шулин Лев Борисович&#9;120.00&#9;BYN&#9;0.0&#9;120.00&#9;Заказ оплачен"
+        spellcheck="false"
+      ></textarea>
+      <div class="import-actions">
+        <button type="button" id="clipboardPasteBtn" class="btn-secondary">Вставить из буфера</button>
+        <button type="button" id="clipboardImportBtn">Импортировать</button>
+        <span class="muted import-result" id="clipboardImportResult"></span>
+      </div>
     </section>
 
     <section class="panel">
@@ -458,6 +517,22 @@ def payments_ui() -> str:
     </div>
   </div>
 
+  <div id="splitEditor" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-labelledby="splitEditorTitle">
+      <h3 id="splitEditorTitle">Разбить платёж</h3>
+      <p class="muted" id="splitEditorInfo"></p>
+      <div id="splitParts"></div>
+      <div class="modal-actions" style="justify-content: space-between;">
+        <button type="button" id="splitAddPart" class="btn-secondary">Добавить часть</button>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="splitSave">Разбить</button>
+          <button type="button" id="splitClose" class="btn-secondary">Отмена</button>
+        </div>
+      </div>
+      <div class="muted" id="splitEditorError" style="color:#b91c1c; min-height:1.2em; margin-top:8px;"></div>
+    </div>
+  </div>
+
   <script>
     const paymentsBody = document.querySelector("#paymentsBody");
     const monthsBody = document.querySelector("#monthsBody");
@@ -475,7 +550,7 @@ def payments_ui() -> str:
       duplicate: "Дубликат"
     };
 
-    const REPORT_SEASON = "2025/2026";
+    const REPORT_SEASON = "2026/2027";
 
     let studentsById = new Map();
     let editorContext = null;
@@ -579,6 +654,8 @@ def payments_ui() -> str:
     function createPaymentForSelect(payment) {
       const td = document.createElement("td");
       td.className = "col-payment-for";
+      const wrap = document.createElement("div");
+      wrap.className = "payment-for-cell";
       const select = document.createElement("select");
       select.className = "inline-select";
       const empty = document.createElement("option");
@@ -612,9 +689,139 @@ def payments_ui() -> str:
             select.disabled = false;
           });
       });
-      td.appendChild(select);
+      const splitBtn = document.createElement("button");
+      splitBtn.type = "button";
+      splitBtn.className = "btn-secondary btn-icon";
+      splitBtn.textContent = "Разбить";
+      splitBtn.title = "Разбить платёж на части по месяцам";
+      splitBtn.addEventListener("click", () => openSplitEditor(payment));
+      wrap.append(select, splitBtn);
+      td.appendChild(wrap);
       return td;
     }
+
+    const splitEditor = document.querySelector("#splitEditor");
+    const splitEditorInfo = document.querySelector("#splitEditorInfo");
+    const splitParts = document.querySelector("#splitParts");
+    const splitEditorError = document.querySelector("#splitEditorError");
+    let splitContext = null;
+
+    function closeSplitEditor() {
+      splitEditor.hidden = true;
+      splitContext = null;
+      splitEditorError.textContent = "";
+    }
+
+    function createSplitPartRow(amount, paymentFor) {
+      const row = document.createElement("div");
+      row.className = "modal-field";
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "120px 1fr auto";
+      row.style.gap = "8px";
+      row.style.alignItems = "end";
+
+      const amountLabel = document.createElement("label");
+      amountLabel.style.display = "grid";
+      amountLabel.style.gap = "4px";
+      amountLabel.innerHTML = "<span>Сумма</span>";
+      const amountInput = document.createElement("input");
+      amountInput.type = "number";
+      amountInput.min = "0.01";
+      amountInput.step = "0.01";
+      amountInput.className = "split-amount";
+      amountInput.value = amount != null ? Number(amount).toFixed(2) : "";
+      amountLabel.appendChild(amountInput);
+
+      const forLabel = document.createElement("label");
+      forLabel.style.display = "grid";
+      forLabel.style.gap = "4px";
+      forLabel.innerHTML = "<span>Оплата за</span>";
+      const forSelect = document.createElement("select");
+      forSelect.className = "split-payment-for";
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "—";
+      forSelect.appendChild(empty);
+      const options = splitContext?.options || paymentForOptions;
+      for (const item of options) {
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label;
+        if (paymentFor === item.value) option.selected = true;
+        forSelect.appendChild(option);
+      }
+      forLabel.appendChild(forSelect);
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn-secondary btn-icon";
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", () => {
+        if (splitParts.children.length <= 2) {
+          splitEditorError.textContent = "Нужно минимум 2 части";
+          return;
+        }
+        row.remove();
+        updateSplitSumHint();
+      });
+
+      amountInput.addEventListener("input", updateSplitSumHint);
+      row.append(amountLabel, forLabel, removeBtn);
+      return row;
+    }
+
+    function updateSplitSumHint() {
+      if (!splitContext) return;
+      const amounts = [...splitParts.querySelectorAll(".split-amount")].map(
+        (input) => Number(input.value || 0)
+      );
+      const sum = amounts.reduce((a, b) => a + b, 0);
+      const total = Number(splitContext.payment.amount);
+      splitEditorInfo.textContent =
+        `Платёж #${splitContext.payment.id} · ${splitContext.payment.payer_full_name || "без ФИО"} · ` +
+        `нужно ${total.toFixed(2)} ${splitContext.payment.currency}, сейчас ${sum.toFixed(2)}`;
+    }
+
+    async function openSplitEditor(payment) {
+      const options = await loadPaymentForOptions(payment.season || null);
+      splitContext = { payment, options };
+      splitParts.replaceChildren();
+      const half = (Number(payment.amount) / 2).toFixed(2);
+      splitParts.append(
+        createSplitPartRow(half, payment.payment_for || null),
+        createSplitPartRow(half, null)
+      );
+      splitEditorError.textContent = "";
+      updateSplitSumHint();
+      splitEditor.hidden = false;
+    }
+
+    async function saveSplit() {
+      if (!splitContext) return;
+      const parts = [...splitParts.children].map((row) => {
+        const amount = row.querySelector(".split-amount").value;
+        const paymentFor = row.querySelector(".split-payment-for").value || null;
+        return { amount, payment_for: paymentFor };
+      });
+      if (parts.length < 2) {
+        splitEditorError.textContent = "Нужно минимум 2 части";
+        return;
+      }
+      const response = await fetch(`/api/payments/${splitContext.payment.id}/split`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parts }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail =
+          typeof body.detail === "string" ? body.detail : "Не удалось разбить платёж";
+        throw new Error(detail);
+      }
+      closeSplitEditor();
+      await loadPayments();
+    }
+
 
     const studentEditor = document.querySelector("#studentEditor");
     const editorPaymentInfo = document.querySelector("#editorPaymentInfo");
@@ -716,6 +923,19 @@ def payments_ui() -> str:
     document.querySelector("#editorClose").addEventListener("click", closeStudentEditor);
     studentEditor.addEventListener("click", (event) => {
       if (event.target === studentEditor) closeStudentEditor();
+    });
+    document.querySelector("#splitAddPart").addEventListener("click", () => {
+      splitParts.appendChild(createSplitPartRow("", null));
+      updateSplitSumHint();
+    });
+    document.querySelector("#splitSave").addEventListener("click", () => {
+      saveSplit().catch((error) => {
+        splitEditorError.textContent = error.message;
+      });
+    });
+    document.querySelector("#splitClose").addEventListener("click", closeSplitEditor);
+    splitEditor.addEventListener("click", (event) => {
+      if (event.target === splitEditor) closeSplitEditor();
     });
 
     async function assignGroup(studentId, groupId) {
@@ -1002,6 +1222,64 @@ def payments_ui() -> str:
         lastUpdated.textContent = error.message;
       });
     });
+
+    const clipboardImportText = document.querySelector("#clipboardImportText");
+    const clipboardImportResult = document.querySelector("#clipboardImportResult");
+    const clipboardPasteBtn = document.querySelector("#clipboardPasteBtn");
+    const clipboardImportBtn = document.querySelector("#clipboardImportBtn");
+
+    clipboardPasteBtn.addEventListener("click", async () => {
+      clipboardImportResult.classList.remove("error");
+      try {
+        const text = await navigator.clipboard.readText();
+        clipboardImportText.value = text;
+        clipboardImportResult.textContent = "Буфер вставлен. Нажмите «Импортировать».";
+      } catch (error) {
+        clipboardImportResult.classList.add("error");
+        clipboardImportResult.textContent =
+          "Не удалось прочитать буфер. Вставьте текст вручную (Ctrl+V).";
+      }
+    });
+
+    clipboardImportBtn.addEventListener("click", async () => {
+      const text = clipboardImportText.value.trim();
+      clipboardImportResult.classList.remove("error");
+      if (!text) {
+        clipboardImportResult.classList.add("error");
+        clipboardImportResult.textContent = "Вставьте таблицу платежей.";
+        return;
+      }
+      clipboardImportBtn.disabled = true;
+      clipboardImportResult.textContent = "Импорт…";
+      try {
+        const response = await fetch("/api/payments/import-clipboard", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, season: REPORT_SEASON }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const detail =
+            typeof payload.detail === "string"
+              ? payload.detail
+              : "Не удалось импортировать платежи";
+          throw new Error(detail);
+        }
+        clipboardImportResult.textContent =
+          `Строк: ${payload.rows_parsed}, новых: ${payload.payments_created}, ` +
+          `дублей: ${payload.payments_skipped}, учеников: +${payload.students_created}`;
+        if (payload.payments_created > 0) {
+          clipboardImportText.value = "";
+        }
+        await loadPayments();
+      } catch (error) {
+        clipboardImportResult.classList.add("error");
+        clipboardImportResult.textContent = error.message;
+      } finally {
+        clipboardImportBtn.disabled = false;
+      }
+    });
+
     for (const header of document.querySelectorAll("th.sortable")) {
       header.addEventListener("click", () => {
         const key = header.dataset.sort;
@@ -1323,312 +1601,5 @@ def student_payments_ui(student_id: int) -> str:
 
 @router.get("/groups-ui", response_class=HTMLResponse, include_in_schema=False)
 def groups_ui() -> str:
-    return """
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MetPay - группы</title>
-  <style>
-    :root {
-      color-scheme: light dark;
-      --bg: #f6f7fb;
-      --card: #ffffff;
-      --text: #172033;
-      --muted: #697386;
-      --line: #d9deea;
-      --accent: #2457d6;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #111827;
-        --card: #182235;
-        --text: #e7ecf5;
-        --muted: #9aa8bd;
-        --line: #2c3950;
-        --accent: #7aa2ff;
-      }
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    main {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 32px 20px;
-    }
-    .muted { color: var(--muted); }
-    .app-nav {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 20px;
-    }
-    .app-nav a {
-      display: inline-flex;
-      align-items: center;
-      padding: 8px 14px;
-      border-radius: 10px;
-      border: 1px solid var(--line);
-      text-decoration: none;
-      color: var(--text);
-      font-weight: 500;
-    }
-    .app-nav a.active {
-      background: var(--accent);
-      color: #fff;
-      border-color: var(--accent);
-    }
-    header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-    h1 { margin: 0 0 6px; font-size: 28px; }
-    button {
-      cursor: pointer;
-      border: 1px solid var(--accent);
-      border-radius: 10px;
-      padding: 9px 12px;
-      background: var(--accent);
-      color: #fff;
-      font: inherit;
-      font-weight: 600;
-    }
-    .panel {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
-      overflow: hidden;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    th, td {
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--line);
-      text-align: left;
-      vertical-align: middle;
-    }
-    th {
-      color: var(--muted);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-      background: color-mix(in srgb, var(--card), var(--bg) 35%);
-    }
-    .badge {
-      display: inline-flex;
-      border-radius: 999px;
-      padding: 4px 9px;
-      background: var(--bg);
-      border: 1px solid var(--line);
-      font-weight: 600;
-    }
-    .empty {
-      padding: 32px;
-      text-align: center;
-      color: var(--muted);
-    }
-    .group-card {
-      border-bottom: 1px solid var(--line);
-      padding: 16px 18px;
-    }
-    .group-card:last-child { border-bottom: none; }
-    .group-head {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-    .group-head h2 {
-      margin: 0;
-      font-size: 1.15rem;
-    }
-    .group-meta {
-      color: var(--muted);
-      font-size: 13px;
-      white-space: nowrap;
-    }
-    .student-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .student-link {
-      display: inline-flex;
-      align-items: center;
-      border: 1px solid var(--line);
-      background: var(--bg);
-      color: var(--accent);
-      border-radius: 999px;
-      padding: 6px 12px;
-      font: inherit;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    .student-link:hover {
-      border-color: var(--accent);
-      background: color-mix(in srgb, var(--accent), transparent 90%);
-    }
-    .students-empty {
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .modal {
-      position: fixed;
-      inset: 0;
-      background: rgba(15, 23, 42, 0.45);
-      display: grid;
-      place-items: center;
-      padding: 20px;
-      z-index: 20;
-    }
-    .modal[hidden] { display: none; }
-    .modal-card {
-      width: min(720px, 100%);
-      max-height: 85vh;
-      overflow: auto;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
-    }
-    .modal-card h3 { margin: 0 0 6px; }
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 16px;
-    }
-    button.btn-secondary {
-      background: var(--card);
-      color: var(--text);
-      border-color: var(--line);
-      font-weight: 500;
-    }
-    .amount { font-weight: 700; white-space: nowrap; }
-  </style>
-</head>
-<body>
-  <main>
-    <nav class="app-nav" aria-label="Разделы">
-      <a href="/payments-ui">Платежи</a>
-      <a href="/groups-ui" class="active">Группы</a>
-    </nav>
-    <header>
-      <div>
-        <h1>Группы</h1>
-        <div class="muted">Когорты по году рождения. Нажмите на ФИО — история платежей.</div>
-      </div>
-      <button type="button" id="refresh">Обновить</button>
-    </header>
-    <section class="panel">
-      <div id="groupsList"></div>
-      <div class="empty" id="emptyState" hidden>Группы не найдены</div>
-      <div class="muted" id="lastUpdated" style="padding: 12px 18px;">Еще не обновлялось</div>
-    </section>
-  </main>
+    return GROUPS_UI_HTML
 
-  <script>
-    const groupsList = document.querySelector("#groupsList");
-    const emptyState = document.querySelector("#emptyState");
-    const lastUpdated = document.querySelector("#lastUpdated");
-
-    function formatDate(value) {
-      if (!value) return "-";
-      return new Intl.DateTimeFormat("ru-RU", {
-        dateStyle: "short",
-        timeStyle: "short"
-      }).format(new Date(value));
-    }
-
-    function renderGroups(groups, students) {
-      groupsList.replaceChildren();
-      emptyState.hidden = groups.length > 0;
-      const byGroup = new Map();
-      for (const student of students) {
-        if (!student.active || !student.group_id) continue;
-        if (!byGroup.has(student.group_id)) byGroup.set(student.group_id, []);
-        byGroup.get(student.group_id).push(student);
-      }
-      for (const group of groups) {
-        const card = document.createElement("article");
-        card.className = "group-card";
-        const head = document.createElement("div");
-        head.className = "group-head";
-        const title = document.createElement("h2");
-        title.textContent = group.name;
-        const meta = document.createElement("div");
-        meta.className = "group-meta";
-        const groupStudents = (byGroup.get(group.id) || []).sort((a, b) =>
-          a.full_name.localeCompare(b.full_name, "ru")
-        );
-        meta.textContent =
-          `${group.monthly_fee} BYN/мес · ${groupStudents.length} ученик(ов)` +
-          (group.active ? "" : " · неактивна");
-        head.append(title, meta);
-        card.appendChild(head);
-
-        if (!groupStudents.length) {
-          const empty = document.createElement("div");
-          empty.className = "students-empty";
-          empty.textContent = "Нет привязанных учеников";
-          card.appendChild(empty);
-        } else {
-          const list = document.createElement("ul");
-          list.className = "student-list";
-          for (const student of groupStudents) {
-            const item = document.createElement("li");
-            const link = document.createElement("a");
-            link.className = "student-link";
-            link.href = `/students-ui/${student.id}`;
-            link.textContent = student.full_name;
-            link.title = "История платежей";
-            item.appendChild(link);
-            list.appendChild(item);
-          }
-          card.appendChild(list);
-        }
-        groupsList.appendChild(card);
-      }
-    }
-
-    async function loadGroups() {
-      const [groupsResponse, studentsResponse] = await Promise.all([
-        fetch("/api/groups"),
-        fetch("/api/students"),
-      ]);
-      if (!groupsResponse.ok || !studentsResponse.ok) {
-        throw new Error("Не удалось загрузить данные");
-      }
-      const groups = await groupsResponse.json();
-      const students = await studentsResponse.json();
-      renderGroups(groups, students);
-      lastUpdated.textContent = "Обновлено: " + formatDate(new Date().toISOString());
-    }
-
-    document.querySelector("#refresh").addEventListener("click", () => {
-      loadGroups().catch((error) => {
-        lastUpdated.textContent = error.message;
-      });
-    });
-    loadGroups().catch((error) => {
-      lastUpdated.textContent = error.message;
-    });
-  </script>
-</body>
-</html>
-"""

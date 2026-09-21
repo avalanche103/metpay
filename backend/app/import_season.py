@@ -10,7 +10,7 @@ from app.services.import_payments import import_season_payments
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Import ArtPay season payments from XLS export")
     parser.add_argument("file", type=Path, help="Path to ArtPay XLS export")
-    parser.add_argument("--season", default="2025/2026", help="Season label, e.g. 2025/2026")
+    parser.add_argument("--season", default="2026/2027", help="Season label, e.g. 2026/2027")
     parser.add_argument("--batch-id", default=None, help="Optional import batch id")
     args = parser.parse_args(argv)
 

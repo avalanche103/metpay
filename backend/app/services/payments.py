@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
+import uuid
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -137,3 +138,70 @@ def manually_match_payment(db: Session, payment: Payment, student: Student) -> P
     if payment.unmatched:
         payment.unmatched.resolved_at = datetime.now(UTC)
     return payment
+
+
+def split_payment(
+    db: Session,
+    payment: Payment,
+    parts: list[tuple[Decimal, str | None]],
+) -> list[Payment]:
+    """Split one payment into several parts with their own payment_for values.
+
+    The original row becomes the first part; additional part rows are created.
+    """
+    if len(parts) < 2:
+        raise ValueError("Нужно минимум 2 части для разбиения")
+
+    quantized = [(amount.quantize(Decimal("0.01")), payment_for) for amount, payment_for in parts]
+    if any(amount <= 0 for amount, _ in quantized):
+        raise ValueError("Сумма каждой части должна быть больше 0")
+
+    total = sum((amount for amount, _ in quantized), Decimal("0.00"))
+    if total != payment.amount.quantize(Decimal("0.01")):
+        raise ValueError(
+            f"Сумма частей ({total}) должна равняться сумме платежа ({payment.amount})"
+        )
+
+    split_group_id = payment.split_group_id or f"split-{payment.id}-{uuid.uuid4().hex[:8]}"
+    first_amount, first_payment_for = quantized[0]
+    payment.amount = first_amount
+    payment.payment_for = first_payment_for
+    payment.split_group_id = split_group_id
+
+    created = [payment]
+    for index, (amount, payment_for) in enumerate(quantized[1:], start=2):
+        child = Payment(
+            student_id=payment.student_id,
+            payer_full_name=payment.payer_full_name,
+            normalized_payer_full_name=payment.normalized_payer_full_name,
+            amount=amount,
+            currency=payment.currency,
+            paid_at=payment.paid_at,
+            status=payment.status,
+            source=payment.source,
+            season=payment.season,
+            payment_for=payment_for,
+            import_batch_id=payment.import_batch_id,
+            external_key=(
+                f"{payment.external_key}:part:{index}"
+                if payment.external_key
+                else f"split:{split_group_id}:{index}"
+            ),
+            split_group_id=split_group_id,
+            ap_store_id=payment.ap_store_id,
+            ap_order_num=payment.ap_order_num,
+            ap_erip_service_no=payment.ap_erip_service_no,
+            ap_erip_invoice_id=payment.ap_erip_invoice_id,
+            ap_erip_trn_id=None,
+            ap_sp_trn_id=payment.ap_sp_trn_id,
+            raw_payload={
+                **(payment.raw_payload or {}),
+                "split_from_payment_id": payment.id,
+                "split_part": index,
+            },
+        )
+        db.add(child)
+        created.append(child)
+
+    db.flush()
+    return created

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 TOURNAMENT_KEY = "tournament"
 TOURNAMENT_LABEL = "Турнир"
@@ -17,6 +18,19 @@ SEASON_PERIODS: dict[str, list[tuple[str, str]]] = {
         ("2026-05", "Май 2026"),
         ("2026-06", "Июнь 2026"),
     ],
+    "2026/2027": [
+        ("2026-08", "Август 2026"),
+        ("2026-09", "Сентябрь 2026"),
+        ("2026-10", "Октябрь 2026"),
+        ("2026-11", "Ноябрь 2026"),
+        ("2026-12", "Декабрь 2026"),
+        ("2027-01", "Январь 2027"),
+        ("2027-02", "Февраль 2027"),
+        ("2027-03", "Март 2027"),
+        ("2027-04", "Апрель 2027"),
+        ("2027-05", "Май 2027"),
+        ("2027-06", "Июнь 2027"),
+    ],
 }
 
 
@@ -24,6 +38,11 @@ SEASON_PERIODS: dict[str, list[tuple[str, str]]] = {
 class PaymentForOption:
     value: str
     label: str
+
+
+def current_calendar_period(now: datetime | None = None) -> str:
+    current = now or datetime.now()
+    return current.strftime("%Y-%m")
 
 
 def payment_for_options(season: str | None = None) -> list[PaymentForOption]:

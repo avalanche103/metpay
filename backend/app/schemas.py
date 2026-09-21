@@ -12,6 +12,12 @@ class GroupCreate(BaseModel):
     active: bool = True
 
 
+class GroupUpdate(BaseModel):
+    name: str | None = None
+    monthly_fee: Decimal | None = None
+    active: bool | None = None
+
+
 class GroupRead(GroupCreate):
     id: int
     model_config = ConfigDict(from_attributes=True)
@@ -67,6 +73,7 @@ class PaymentRead(BaseModel):
     source: PaymentSource
     season: str | None
     payment_for: str | None
+    split_group_id: str | None = None
     ap_erip_service_no: str | None
     ap_erip_invoice_id: str | None
     ap_erip_trn_id: str | None
@@ -78,8 +85,35 @@ class PaymentUpdate(BaseModel):
     payment_for: str | None = None
 
 
+class PaymentSplitPart(BaseModel):
+    amount: Decimal = Field(gt=0)
+    payment_for: str | None = None
+
+
+class PaymentSplitRequest(BaseModel):
+    parts: list[PaymentSplitPart] = Field(min_length=2)
+
+
 class ManualMatchRequest(BaseModel):
     student_id: int
+
+
+class ClipboardImportRequest(BaseModel):
+    text: str = Field(min_length=1)
+    season: str = "2026/2027"
+    batch_id: str | None = None
+
+
+class ClipboardImportResult(BaseModel):
+    batch_id: str
+    season: str
+    rows_parsed: int
+    students_created: int
+    students_existing: int
+    payments_created: int
+    payments_skipped: int
+    payments_matched: int
+    payments_needs_review: int
 
 
 class ArtPayWebhookResult(BaseModel):

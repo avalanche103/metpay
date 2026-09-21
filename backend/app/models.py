@@ -106,6 +106,7 @@ class Payment(TimestampMixin, Base):
     payment_for: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
     import_batch_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     external_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    split_group_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
 
     ap_store_id: Mapped[str | None] = mapped_column(String(30), nullable=True)
     ap_order_num: Mapped[str | None] = mapped_column(String(64), nullable=True)

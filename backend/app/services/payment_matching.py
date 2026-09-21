@@ -49,6 +49,11 @@ def normalize_full_name(value: str | None) -> str:
     return _SPACES.sub(" ", normalized).strip()
 
 
+def name_parts(value: str | None) -> list[str]:
+    normalized = normalize_full_name(value)
+    return normalized.split() if normalized else []
+
+
 def name_variants(value: str | None) -> set[str]:
     normalized = normalize_full_name(value)
     if not normalized:
@@ -60,14 +65,70 @@ def name_variants(value: str | None) -> set[str]:
     return variants
 
 
+def _is_token_prefix(shorter: list[str], longer: list[str]) -> bool:
+    if not shorter or len(shorter) > len(longer):
+        return False
+    return longer[: len(shorter)] == shorter
+
+
+def names_compatible(left: str | None, right: str | None) -> bool:
+    """True when names are the same person with/without patronymic.
+
+    Examples:
+    - "Валиев Александр" ~ "Валиев Александр Станиславович"
+    - "Иванов Иван Петрович" !~ "Иванов Иван Сергеевич"
+    """
+    left_parts = name_parts(left)
+    right_parts = name_parts(right)
+    if not left_parts or not right_parts:
+        return False
+    if left_parts == right_parts:
+        return True
+    if len(left_parts) >= 2 and len(right_parts) >= 2:
+        if frozenset(left_parts[:2]) != frozenset(right_parts[:2]):
+            return False
+        if len(left_parts) >= 3 and len(right_parts) >= 3:
+            return (
+                left_parts == right_parts
+                or _is_token_prefix(left_parts, right_parts)
+                or _is_token_prefix(right_parts, left_parts)
+            )
+        return True
+    return _is_token_prefix(left_parts, right_parts) or _is_token_prefix(right_parts, left_parts)
+
+
+def prefer_fuller_name(current: str, candidate: str) -> str:
+    """Keep the longer/more complete formatted name when merging identity."""
+    current_parts = name_parts(current)
+    candidate_parts = name_parts(candidate)
+    if len(candidate_parts) > len(current_parts):
+        return format_full_name(candidate)
+    if len(candidate_parts) == len(current_parts) and len(format_full_name(candidate)) > len(
+        format_full_name(current)
+    ):
+        return format_full_name(candidate)
+    return format_full_name(current) or format_full_name(candidate)
+
+
+def find_compatible_students(db: Session, full_name: str | None) -> list[Student]:
+    variants = name_variants(full_name)
+    students = list(db.scalars(select(Student).where(Student.active.is_(True))))
+    if not students:
+        return []
+
+    exact = [student for student in students if student.normalized_full_name in variants]
+    if exact:
+        return exact
+
+    return [student for student in students if names_compatible(full_name, student.full_name)]
+
+
 def find_student_for_payer(db: Session, payer_full_name: str | None) -> MatchResult:
     variants = name_variants(payer_full_name)
     if not variants:
         return MatchResult(student=None, candidate_ids=[], reason="payer full name is missing")
 
-    students = db.scalars(
-        select(Student).where(Student.active.is_(True), Student.normalized_full_name.in_(variants))
-    ).all()
+    students = find_compatible_students(db, payer_full_name)
 
     if len(students) == 1:
         return MatchResult(student=students[0], candidate_ids=[students[0].id])
@@ -82,3 +143,17 @@ def find_student_for_payer(db: Session, payer_full_name: str | None) -> MatchRes
         candidate_ids=[],
         reason="student was not found by payer full name",
     )
+
+
+def find_active_duplicate(
+    db: Session,
+    full_name: str,
+    *,
+    exclude_student_id: int | None = None,
+) -> Student | None:
+    matches = find_compatible_students(db, full_name)
+    for student in matches:
+        if exclude_student_id is not None and student.id == exclude_student_id:
+            continue
+        return student
+    return None

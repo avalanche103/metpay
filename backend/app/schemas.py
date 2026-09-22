@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -33,6 +33,13 @@ class StudentCreate(BaseModel):
     full_name: str
     group_id: int | None = None
     active: bool = True
+    birth_date: date | None = None
+    passport_number: str | None = None
+    passport_personal_number: str | None = None
+    passport_issued_at: date | None = None
+    passport_issued_by: str | None = None
+    address: str | None = None
+    educational_institution: str | None = None
     parents: list[ParentCreate] = Field(default_factory=list)
 
 
@@ -40,6 +47,14 @@ class StudentUpdate(BaseModel):
     full_name: str | None = None
     group_id: int | None = None
     active: bool | None = None
+    birth_date: date | None = None
+    passport_number: str | None = None
+    passport_personal_number: str | None = None
+    passport_issued_at: date | None = None
+    passport_issued_by: str | None = None
+    address: str | None = None
+    educational_institution: str | None = None
+    parents: list[ParentCreate] | None = None
 
 
 class StudentMergeRequest(BaseModel):
@@ -58,6 +73,13 @@ class StudentRead(BaseModel):
     group_id: int | None
     group_name: str | None = None
     active: bool
+    birth_date: date | None = None
+    passport_number: str | None = None
+    passport_personal_number: str | None = None
+    passport_issued_at: date | None = None
+    passport_issued_by: str | None = None
+    address: str | None = None
+    educational_institution: str | None = None
     parents: list[ParentRead] = Field(default_factory=list)
     model_config = ConfigDict(from_attributes=True)
 
@@ -73,6 +95,7 @@ class PaymentRead(BaseModel):
     source: PaymentSource
     season: str | None
     payment_for: str | None
+    counts_as_full: bool = False
     split_group_id: str | None = None
     ap_erip_service_no: str | None
     ap_erip_invoice_id: str | None
@@ -83,6 +106,18 @@ class PaymentRead(BaseModel):
 
 class PaymentUpdate(BaseModel):
     payment_for: str | None = None
+    counts_as_full: bool | None = None
+
+
+class MonthSkipCreate(BaseModel):
+    period: str
+
+
+class MonthSkipRead(BaseModel):
+    id: int
+    student_id: int
+    period: str
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaymentSplitPart(BaseModel):

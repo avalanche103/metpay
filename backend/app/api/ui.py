@@ -1373,6 +1373,11 @@ def student_payments_ui(student_id: int) -> str:
       margin-bottom: 20px;
     }
     h1 { margin: 0 0 6px; font-size: 28px; }
+    h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
     button {
       cursor: pointer;
       border: 1px solid var(--accent);
@@ -1389,12 +1394,17 @@ def student_payments_ui(student_id: int) -> str:
       border-color: var(--line);
       font-weight: 500;
     }
+    button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
     .panel {
       background: var(--card);
       border: 1px solid var(--line);
       border-radius: 16px;
       box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
       overflow: hidden;
+      margin-bottom: 20px;
     }
     .table-wrap { overflow-x: auto; }
     table {
@@ -1415,15 +1425,23 @@ def student_payments_ui(student_id: int) -> str:
       letter-spacing: .04em;
       background: color-mix(in srgb, var(--card), var(--bg) 35%);
     }
-    select {
+    select, input, textarea {
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 6px 8px;
+      padding: 8px 10px;
       background: var(--card);
       color: var(--text);
       font: inherit;
       font-size: 13px;
+      width: 100%;
+    }
+    select {
       min-width: 132px;
+      width: auto;
+    }
+    textarea {
+      min-height: 64px;
+      resize: vertical;
     }
     .amount { font-weight: 700; white-space: nowrap; }
     .empty {
@@ -1434,6 +1452,115 @@ def student_payments_ui(student_id: int) -> str:
     .toolbar {
       padding: 12px 18px;
       border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .profile-body {
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+    }
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px 14px;
+    }
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+    .field.full {
+      grid-column: 1 / -1;
+    }
+    .field label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .profile-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .profile-status {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .profile-status.error { color: #c0392b; }
+    .profile-status.ok { color: #1f7a4d; }
+    .toolbar.payments-toolbar {
+      flex-wrap: wrap;
+      justify-content: flex-start;
+      gap: 10px 14px;
+    }
+    .toolbar-meta {
+      margin-left: auto;
+      color: var(--muted);
+    }
+    .skip-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .skip-controls label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .skip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      width: 100%;
+    }
+    .skip-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 13px;
+      background: color-mix(in srgb, var(--card), var(--bg) 40%);
+    }
+    .skip-chip button {
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .full-pay-cell {
+      white-space: nowrap;
+    }
+    .full-pay-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .full-pay-label input {
+      width: auto;
+      margin: 0;
+    }
+    .full-pay-muted {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    @media (max-width: 700px) {
+      .field-grid { grid-template-columns: 1fr; }
+      .toolbar-meta { margin-left: 0; width: 100%; }
     }
   </style>
 </head>
@@ -1450,8 +1577,17 @@ def student_payments_ui(student_id: int) -> str:
       </div>
       <button type="button" id="refresh">Обновить</button>
     </header>
+
     <section class="panel">
-      <div class="toolbar muted" id="lastUpdated">Еще не обновлялось</div>
+      <div class="toolbar payments-toolbar">
+        <div class="skip-controls">
+          <label for="skipMonthSelect">Пропуск месяца</label>
+          <select id="skipMonthSelect"></select>
+          <button type="button" class="btn-secondary" id="addSkipBtn">Отметить пропуск</button>
+        </div>
+        <div class="toolbar-meta muted" id="lastUpdated">Еще не обновлялось</div>
+        <div class="skip-list" id="skipList"></div>
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -1461,12 +1597,80 @@ def student_payments_ui(student_id: int) -> str:
               <th>ФИО из платежа</th>
               <th>Сезон</th>
               <th>Оплата</th>
+              <th>Полная оплата</th>
             </tr>
           </thead>
           <tbody id="paymentsBody"></tbody>
         </table>
         <div class="empty" id="emptyState" hidden>Платежей пока нет</div>
       </div>
+    </section>
+
+    <section class="panel" aria-labelledby="profileHeading">
+      <div class="toolbar">
+        <h2 id="profileHeading">Данные ученика</h2>
+      </div>
+      <form class="profile-body" id="profileForm">
+        <div class="field-grid">
+          <div class="field">
+            <label for="birthDate">Дата рождения</label>
+            <input type="date" id="birthDate" name="birth_date">
+          </div>
+          <div class="field">
+            <label for="educationalInstitution">Учебное заведение</label>
+            <input type="text" id="educationalInstitution" name="educational_institution" autocomplete="organization">
+          </div>
+          <div class="field full">
+            <label for="address">Адрес проживания</label>
+            <textarea id="address" name="address" rows="2" autocomplete="street-address"></textarea>
+          </div>
+        </div>
+
+        <div class="section-title">Паспортные данные</div>
+        <div class="field-grid">
+          <div class="field">
+            <label for="passportNumber">Номер паспорта</label>
+            <input type="text" id="passportNumber" name="passport_number">
+          </div>
+          <div class="field">
+            <label for="passportPersonalNumber">Персональный номер</label>
+            <input type="text" id="passportPersonalNumber" name="passport_personal_number">
+          </div>
+          <div class="field">
+            <label for="passportIssuedAt">Дата выдачи</label>
+            <input type="date" id="passportIssuedAt" name="passport_issued_at">
+          </div>
+          <div class="field">
+            <label for="passportIssuedBy">Орган выдачи</label>
+            <input type="text" id="passportIssuedBy" name="passport_issued_by">
+          </div>
+        </div>
+
+        <div class="section-title">Родители</div>
+        <div class="field-grid">
+          <div class="field">
+            <label for="parent1Name">ФИО родителя 1</label>
+            <input type="text" id="parent1Name" autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="parent1Phone">Телефон родителя 1</label>
+            <input type="tel" id="parent1Phone" autocomplete="tel">
+          </div>
+          <div class="field">
+            <label for="parent2Name">ФИО родителя 2</label>
+            <input type="text" id="parent2Name" autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="parent2Phone">Телефон родителя 2</label>
+            <input type="tel" id="parent2Phone" autocomplete="tel">
+          </div>
+        </div>
+
+        <div class="profile-actions">
+          <button type="submit" id="saveProfile">Сохранить</button>
+          <span class="profile-status" id="profileStatus"></span>
+        </div>
+      </form>
     </section>
   </main>
 
@@ -1477,7 +1681,16 @@ def student_payments_ui(student_id: int) -> str:
     const paymentsBody = document.querySelector("#paymentsBody");
     const emptyState = document.querySelector("#emptyState");
     const lastUpdated = document.querySelector("#lastUpdated");
+    const profileForm = document.querySelector("#profileForm");
+    const profileStatus = document.querySelector("#profileStatus");
+    const saveProfileBtn = document.querySelector("#saveProfile");
+    const skipMonthSelect = document.querySelector("#skipMonthSelect");
+    const addSkipBtn = document.querySelector("#addSkipBtn");
+    const skipList = document.querySelector("#skipList");
     const paymentForOptionsBySeason = new Map();
+    let monthlyFee = null;
+    let monthSkips = [];
+    let monthOptions = [];
 
     function formatDate(value) {
       if (!value) return "-";
@@ -1485,6 +1698,56 @@ def student_payments_ui(student_id: int) -> str:
         dateStyle: "short",
         timeStyle: "short"
       }).format(new Date(value));
+    }
+
+    function emptyToNull(value) {
+      const trimmed = (value || "").trim();
+      return trimmed ? trimmed : null;
+    }
+
+    function setProfileStatus(message, kind) {
+      profileStatus.textContent = message || "";
+      profileStatus.className = "profile-status" + (kind ? " " + kind : "");
+    }
+
+    function fillProfileForm(student) {
+      profileForm.birth_date.value = student.birth_date || "";
+      profileForm.educational_institution.value = student.educational_institution || "";
+      profileForm.address.value = student.address || "";
+      profileForm.passport_number.value = student.passport_number || "";
+      profileForm.passport_personal_number.value = student.passport_personal_number || "";
+      profileForm.passport_issued_at.value = student.passport_issued_at || "";
+      profileForm.passport_issued_by.value = student.passport_issued_by || "";
+
+      const parents = student.parents || [];
+      document.querySelector("#parent1Name").value = parents[0]?.full_name || "";
+      document.querySelector("#parent1Phone").value = parents[0]?.phone || "";
+      document.querySelector("#parent2Name").value = parents[1]?.full_name || "";
+      document.querySelector("#parent2Phone").value = parents[1]?.phone || "";
+    }
+
+    function buildProfilePayload() {
+      const parents = [
+        {
+          full_name: emptyToNull(document.querySelector("#parent1Name").value),
+          phone: emptyToNull(document.querySelector("#parent1Phone").value),
+        },
+        {
+          full_name: emptyToNull(document.querySelector("#parent2Name").value),
+          phone: emptyToNull(document.querySelector("#parent2Phone").value),
+        },
+      ].filter((parent) => parent.full_name || parent.phone);
+
+      return {
+        birth_date: emptyToNull(profileForm.birth_date.value),
+        educational_institution: emptyToNull(profileForm.educational_institution.value),
+        address: emptyToNull(profileForm.address.value),
+        passport_number: emptyToNull(profileForm.passport_number.value),
+        passport_personal_number: emptyToNull(profileForm.passport_personal_number.value),
+        passport_issued_at: emptyToNull(profileForm.passport_issued_at.value),
+        passport_issued_by: emptyToNull(profileForm.passport_issued_by.value),
+        parents,
+      };
     }
 
     async function loadPaymentForOptions(season) {
@@ -1500,6 +1763,87 @@ def student_payments_ui(student_id: int) -> str:
       const options = await response.json();
       paymentForOptionsBySeason.set(key, options);
       return options;
+    }
+
+    function monthLabel(period) {
+      const found = monthOptions.find((item) => item.value === period);
+      return found ? found.label : period;
+    }
+
+    function fillSkipMonthSelect() {
+      const skipped = new Set(monthSkips.map((item) => item.period));
+      skipMonthSelect.replaceChildren();
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Выберите месяц";
+      skipMonthSelect.appendChild(placeholder);
+      for (const item of monthOptions) {
+        if (item.value === "tournament") continue;
+        if (skipped.has(item.value)) continue;
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label;
+        skipMonthSelect.appendChild(option);
+      }
+    }
+
+    function renderSkipList() {
+      skipList.replaceChildren();
+      if (!monthSkips.length) return;
+      for (const skip of monthSkips) {
+        const chip = document.createElement("div");
+        chip.className = "skip-chip";
+        chip.appendChild(
+          Object.assign(document.createElement("span"), {
+            textContent: `Пропущен: ${monthLabel(skip.period)}`,
+          })
+        );
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "btn-secondary";
+        removeBtn.textContent = "Снять";
+        removeBtn.addEventListener("click", () => {
+          removeSkip(skip.period).catch((error) => {
+            lastUpdated.textContent = error.message;
+          });
+        });
+        chip.appendChild(removeBtn);
+        skipList.appendChild(chip);
+      }
+    }
+
+    async function addSkip() {
+      const period = skipMonthSelect.value;
+      if (!period) {
+        lastUpdated.textContent = "Выберите месяц для пропуска";
+        return;
+      }
+      addSkipBtn.disabled = true;
+      try {
+        const response = await fetch(`/api/students/${studentId}/month-skips`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ period }),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(
+            typeof body.detail === "string" ? body.detail : "Не удалось отметить пропуск"
+          );
+        }
+        await loadStudentPayments();
+      } finally {
+        addSkipBtn.disabled = false;
+      }
+    }
+
+    async function removeSkip(period) {
+      const response = await fetch(
+        `/api/students/${studentId}/month-skips/${encodeURIComponent(period)}`,
+        { method: "DELETE" }
+      );
+      if (!response.ok) throw new Error("Не удалось снять пропуск");
+      await loadStudentPayments();
     }
 
     function createPaymentForSelect(payment, options) {
@@ -1540,6 +1884,50 @@ def student_payments_ui(student_id: int) -> str:
       return td;
     }
 
+    function createFullPayCell(payment) {
+      const td = document.createElement("td");
+      td.className = "full-pay-cell";
+      const fee = monthlyFee == null || monthlyFee === "" ? null : Number(monthlyFee);
+      const amount = Number(payment.amount) || 0;
+      const isPartial = fee != null && amount > 0 && amount + 0.001 < fee;
+      if (!isPartial && !payment.counts_as_full) {
+        td.appendChild(
+          Object.assign(document.createElement("span"), {
+            className: "full-pay-muted",
+            textContent: "—",
+          })
+        );
+        return td;
+      }
+      const label = document.createElement("label");
+      label.className = "full-pay-label";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = Boolean(payment.counts_as_full);
+      checkbox.addEventListener("change", () => {
+        checkbox.disabled = true;
+        fetch(`/api/payments/${payment.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ counts_as_full: checkbox.checked }),
+        })
+          .then((response) => {
+            if (!response.ok) throw new Error("Не удалось сохранить признак полной оплаты");
+            payment.counts_as_full = checkbox.checked;
+          })
+          .catch((error) => {
+            lastUpdated.textContent = error.message;
+            checkbox.checked = Boolean(payment.counts_as_full);
+          })
+          .finally(() => {
+            checkbox.disabled = false;
+          });
+      });
+      label.append(checkbox, document.createTextNode("Полная оплата"));
+      td.appendChild(label);
+      return td;
+    }
+
     async function renderPayments(payments) {
       paymentsBody.replaceChildren();
       emptyState.hidden = payments.length > 0;
@@ -1558,7 +1946,8 @@ def student_payments_ui(student_id: int) -> str:
             textContent: payment.payer_full_name || "-"
           }),
           Object.assign(document.createElement("td"), { textContent: payment.season || "-" }),
-          createPaymentForSelect(payment, options)
+          createPaymentForSelect(payment, options),
+          createFullPayCell(payment)
         );
         paymentsBody.appendChild(row);
       }
@@ -1568,24 +1957,72 @@ def student_payments_ui(student_id: int) -> str:
       if (!Number.isFinite(studentId)) {
         throw new Error("Некорректный идентификатор ученика");
       }
-      const [studentResponse, paymentsResponse] = await Promise.all([
-        fetch(`/api/students/${studentId}`),
-        fetch(`/api/payments?student_id=${studentId}`),
-      ]);
+      const [studentResponse, paymentsResponse, groupsResponse, skipsResponse, optionsResponse] =
+        await Promise.all([
+          fetch(`/api/students/${studentId}`),
+          fetch(`/api/payments?student_id=${studentId}`),
+          fetch("/api/groups"),
+          fetch(`/api/students/${studentId}/month-skips`),
+          fetch("/api/payments/payment-for-options"),
+        ]);
       if (!studentResponse.ok) throw new Error("Ученик не найден");
       if (!paymentsResponse.ok) throw new Error("Не удалось загрузить платежи");
+      if (!groupsResponse.ok) throw new Error("Не удалось загрузить группы");
+      if (!skipsResponse.ok) throw new Error("Не удалось загрузить пропуски");
+      if (!optionsResponse.ok) throw new Error("Не удалось загрузить периоды");
       const student = await studentResponse.json();
       const payments = await paymentsResponse.json();
+      const groups = await groupsResponse.json();
+      monthSkips = await skipsResponse.json();
+      monthOptions = await optionsResponse.json();
+      const group = groups.find((item) => item.id === student.group_id);
+      monthlyFee = group && group.monthly_fee != null ? Number(group.monthly_fee) : null;
       studentTitle.textContent = student.full_name;
       const total = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
       studentSummary.textContent =
         `${payments.length} платеж(ей) · всего ${total.toFixed(2)} BYN` +
         (student.group_name ? ` · группа ${student.group_name}` : "");
+      fillProfileForm(student);
+      fillSkipMonthSelect();
+      renderSkipList();
       await renderPayments(payments);
       lastUpdated.textContent = "Обновлено: " + formatDate(new Date().toISOString());
     }
 
+    addSkipBtn.addEventListener("click", () => {
+      addSkip().catch((error) => {
+        lastUpdated.textContent = error.message;
+      });
+    });
+
+    profileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      saveProfileBtn.disabled = true;
+      setProfileStatus("Сохранение…");
+      try {
+        const response = await fetch(`/api/students/${studentId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildProfilePayload()),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(
+            typeof body.detail === "string" ? body.detail : "Не удалось сохранить данные"
+          );
+        }
+        const student = await response.json();
+        fillProfileForm(student);
+        setProfileStatus("Сохранено", "ok");
+      } catch (error) {
+        setProfileStatus(error.message, "error");
+      } finally {
+        saveProfileBtn.disabled = false;
+      }
+    });
+
     document.querySelector("#refresh").addEventListener("click", () => {
+      setProfileStatus("");
       loadStudentPayments().catch((error) => {
         lastUpdated.textContent = error.message;
       });

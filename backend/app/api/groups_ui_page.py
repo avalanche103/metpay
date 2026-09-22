@@ -189,6 +189,11 @@ GROUPS_UI_HTML = """
       background: color-mix(in srgb, var(--warn), transparent 90%);
       border-color: color-mix(in srgb, var(--warn), transparent 55%);
     }
+    .status-skipped {
+      color: var(--muted);
+      background: color-mix(in srgb, var(--muted), transparent 90%);
+      border-color: color-mix(in srgb, var(--muted), transparent 55%);
+    }
     .status-none {
       color: var(--bad);
       background: color-mix(in srgb, var(--bad), transparent 90%);
@@ -410,6 +415,8 @@ GROUPS_UI_HTML = """
     let cachedStudents = [];
     let cachedGroups = [];
     let paidByStudentId = new Map();
+    let fullCreditByStudentId = new Set();
+    let skippedStudentIds = new Set();
     let currentPeriod = "";
     let currentPeriodLabel = "";
 
@@ -448,18 +455,29 @@ GROUPS_UI_HTML = """
 
     function buildPaidByStudent(payments) {
       const map = new Map();
+      const fullCredit = new Set();
       for (const payment of payments) {
         if (!payment.student_id) continue;
         if (paymentMonthKey(payment) !== currentPeriod) continue;
         const prev = map.get(payment.student_id) || 0;
         map.set(payment.student_id, prev + Number(payment.amount));
+        if (payment.counts_as_full) {
+          fullCredit.add(payment.student_id);
+        }
       }
+      fullCreditByStudentId = fullCredit;
       return map;
     }
 
-    function paymentStatus(amount, monthlyFee) {
+    function paymentStatus(studentId, amount, monthlyFee) {
+      if (skippedStudentIds.has(studentId)) {
+        return { label: "Пропущен", className: "status-skipped", amount: Number(amount) || 0 };
+      }
       const paid = Number(amount) || 0;
       const fee = monthlyFee == null || monthlyFee === "" ? null : Number(monthlyFee);
+      if (fullCreditByStudentId.has(studentId)) {
+        return { label: "Оплачено", className: "status-ok", amount: paid };
+      }
       if (paid <= 0) {
         return { label: "Не оплачено", className: "status-none", amount: paid };
       }
@@ -618,7 +636,11 @@ GROUPS_UI_HTML = """
 
     function createStatusCell(student, monthlyFee) {
       const td = document.createElement("td");
-      const status = paymentStatus(paidByStudentId.get(student.id) || 0, monthlyFee);
+      const status = paymentStatus(
+        student.id,
+        paidByStudentId.get(student.id) || 0,
+        monthlyFee
+      );
       const badge = document.createElement("span");
       badge.className = `status ${status.className}`;
       badge.textContent = status.label;
@@ -629,11 +651,15 @@ GROUPS_UI_HTML = """
     function createAmountCell(student, monthlyFee) {
       const td = document.createElement("td");
       const paid = paidByStudentId.get(student.id) || 0;
-      const status = paymentStatus(paid, monthlyFee);
+      const status = paymentStatus(student.id, paid, monthlyFee);
       if (status.className === "status-none" && monthlyFee != null && monthlyFee !== "") {
         td.className = "expected";
         td.textContent = formatFee(monthlyFee);
         td.title = `Ожидаемая сумма: ${formatFee(monthlyFee)} BYN`;
+      } else if (status.className === "status-skipped") {
+        td.className = "muted";
+        td.textContent = "—";
+        td.title = "Месяц пропущен";
       } else {
         td.className = "amount";
         td.textContent = formatFee(paid);
@@ -672,7 +698,11 @@ GROUPS_UI_HTML = """
     }
 
     function unpaidExpected(student, monthlyFee) {
-      const status = paymentStatus(paidByStudentId.get(student.id) || 0, monthlyFee);
+      const status = paymentStatus(
+        student.id,
+        paidByStudentId.get(student.id) || 0,
+        monthlyFee
+      );
       if (status.className !== "status-none") return 0;
       if (monthlyFee == null || monthlyFee === "") return 0;
       return Number(monthlyFee) || 0;
@@ -713,6 +743,7 @@ GROUPS_UI_HTML = """
         );
         const paidCount = groupStudents.filter((student) => {
           const status = paymentStatus(
+            student.id,
             paidByStudentId.get(student.id) || 0,
             group.monthly_fee
           );
@@ -720,6 +751,7 @@ GROUPS_UI_HTML = """
         }).length;
         const unpaidStudents = groupStudents.filter((student) => {
           const status = paymentStatus(
+            student.id,
             paidByStudentId.get(student.id) || 0,
             group.monthly_fee
           );
@@ -805,17 +837,26 @@ GROUPS_UI_HTML = """
 
     async function loadGroups() {
       detectCurrentPeriod();
-      const [groupsResponse, studentsResponse, paymentsResponse] = await Promise.all([
-        fetch("/api/groups"),
-        fetch("/api/students"),
-        fetch("/api/payments"),
-      ]);
-      if (!groupsResponse.ok || !studentsResponse.ok || !paymentsResponse.ok) {
+      const [groupsResponse, studentsResponse, paymentsResponse, skipsResponse] =
+        await Promise.all([
+          fetch("/api/groups"),
+          fetch("/api/students"),
+          fetch("/api/payments"),
+          fetch(`/api/students/month-skips?period=${encodeURIComponent(currentPeriod)}`),
+        ]);
+      if (
+        !groupsResponse.ok ||
+        !studentsResponse.ok ||
+        !paymentsResponse.ok ||
+        !skipsResponse.ok
+      ) {
         throw new Error("Не удалось загрузить данные");
       }
       cachedGroups = await groupsResponse.json();
       cachedStudents = await studentsResponse.json();
       const payments = await paymentsResponse.json();
+      const skips = await skipsResponse.json();
+      skippedStudentIds = new Set(skips.map((item) => item.student_id));
       paidByStudentId = buildPaidByStudent(payments);
       renderGroups(cachedGroups, cachedStudents);
       lastUpdated.textContent = "Обновлено: " + formatDate(new Date().toISOString());

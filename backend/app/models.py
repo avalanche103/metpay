@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -60,12 +61,22 @@ class Student(TimestampMixin, Base):
     normalized_full_name: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
     group_id: Mapped[int | None] = mapped_column(ForeignKey("groups.id"), nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    passport_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    passport_personal_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    passport_issued_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    passport_issued_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    educational_institution: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     group: Mapped[Group | None] = relationship(back_populates="students")
     parents: Mapped[list["Parent"]] = relationship(
         back_populates="student", cascade="all, delete-orphan"
     )
     payments: Mapped[list["Payment"]] = relationship(back_populates="student")
+    month_skips: Mapped[list["StudentMonthSkip"]] = relationship(
+        back_populates="student", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_students_name_active", "normalized_full_name", "active"),
@@ -104,6 +115,7 @@ class Payment(TimestampMixin, Base):
     )
     season: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
     payment_for: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
+    counts_as_full: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     import_batch_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     external_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     split_group_id: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
@@ -124,6 +136,21 @@ class Payment(TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("ap_erip_trn_id", name="uq_payments_ap_erip_trn_id"),
         Index("ix_payments_erip_invoice", "ap_erip_service_no", "ap_erip_invoice_id"),
+    )
+
+
+class StudentMonthSkip(TimestampMixin, Base):
+    __tablename__ = "student_month_skips"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
+    period: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    student: Mapped[Student] = relationship(back_populates="month_skips")
+
+    __table_args__ = (
+        UniqueConstraint("student_id", "period", name="uq_student_month_skips_student_period"),
+        Index("ix_student_month_skips_period", "period"),
     )
 
 

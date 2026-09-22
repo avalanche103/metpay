@@ -71,6 +71,37 @@ def test_payment_for_can_be_updated(client: TestClient) -> None:
     assert [item["id"] for item in listed] == [payment_id]
 
 
+def test_payment_counts_as_full_can_be_toggled(client: TestClient) -> None:
+    created = client.post(
+        "/api/webhooks/artpay",
+        json={
+            "ap_amount": "70.00",
+            "ap_currency": "BYN",
+            "ap_erip_trn_id": "counts-as-full-1",
+            "ap_erip_trn_state": "Paid",
+            "up_student_fio": "Частичный Ученик",
+        },
+    ).json()
+    payment_id = created["payment_id"]
+
+    payment = client.get(f"/api/payments/{payment_id}").json()
+    assert payment["counts_as_full"] is False
+
+    response = client.patch(
+        f"/api/payments/{payment_id}",
+        json={"counts_as_full": True},
+    )
+    assert response.status_code == 200
+    assert response.json()["counts_as_full"] is True
+
+    response = client.patch(
+        f"/api/payments/{payment_id}",
+        json={"counts_as_full": False},
+    )
+    assert response.status_code == 200
+    assert response.json()["counts_as_full"] is False
+
+
 def test_payment_can_be_split_into_parts(client: TestClient) -> None:
     created = client.post(
         "/api/webhooks/artpay",

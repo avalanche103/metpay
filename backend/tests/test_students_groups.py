@@ -151,3 +151,134 @@ def test_groups_ui_renders(client: TestClient) -> None:
     assert "Оплата" in response.text or "оплата" in response.text
     assert "expectedTotal" in response.text
     assert "ожидаем" in response.text.lower() or "Ожидаем" in response.text
+
+
+def test_student_profile_can_be_created_and_updated(client: TestClient) -> None:
+    create_response = client.post(
+        "/api/students",
+        json={
+            "full_name": "Профилев Ученик",
+            "birth_date": "2010-05-15",
+            "passport_number": "AB1234567",
+            "passport_personal_number": "1234567A123PB1",
+            "passport_issued_at": "2024-01-10",
+            "passport_issued_by": "РОВД Центрального района",
+            "address": "г. Минск, ул. Примерная, 1",
+            "educational_institution": "СШ №1",
+            "parents": [
+                {"full_name": "Профилева Мария", "phone": "+375291111111"},
+                {"full_name": "Профилев Иван", "phone": "+375292222222"},
+            ],
+        },
+    )
+    assert create_response.status_code == 201
+    created = create_response.json()
+    assert created["birth_date"] == "2010-05-15"
+    assert created["passport_number"] == "AB1234567"
+    assert created["passport_personal_number"] == "1234567A123PB1"
+    assert created["passport_issued_at"] == "2024-01-10"
+    assert created["passport_issued_by"] == "РОВД Центрального района"
+    assert created["address"] == "г. Минск, ул. Примерная, 1"
+    assert created["educational_institution"] == "СШ №1"
+    assert len(created["parents"]) == 2
+    assert created["parents"][0]["full_name"] == "Профилева Мария"
+    assert created["parents"][0]["phone"] == "+375291111111"
+    assert created["parents"][1]["full_name"] == "Профилев Иван"
+
+    get_response = client.get(f"/api/students/{created['id']}")
+    assert get_response.status_code == 200
+    assert get_response.json()["educational_institution"] == "СШ №1"
+
+    update_response = client.patch(
+        f"/api/students/{created['id']}",
+        json={
+            "address": "г. Минск, ул. Новая, 5",
+            "educational_institution": "Гимназия №2",
+            "parents": [
+                {"full_name": "Профилева Анна", "phone": "+375293333333"},
+            ],
+        },
+    )
+    assert update_response.status_code == 200
+    updated = update_response.json()
+    assert updated["address"] == "г. Минск, ул. Новая, 5"
+    assert updated["educational_institution"] == "Гимназия №2"
+    assert updated["passport_number"] == "AB1234567"
+    assert len(updated["parents"]) == 1
+    assert updated["parents"][0]["full_name"] == "Профилева Анна"
+    assert updated["parents"][0]["phone"] == "+375293333333"
+
+
+def test_student_parents_are_replaced_on_patch(client: TestClient) -> None:
+    student = client.post(
+        "/api/students",
+        json={
+            "full_name": "Родительский Тест",
+            "parents": [
+                {"full_name": "Отец Один", "phone": "111"},
+                {"full_name": "Мать Один", "phone": "222"},
+            ],
+        },
+    ).json()
+    assert len(student["parents"]) == 2
+
+    response = client.patch(
+        f"/api/students/{student['id']}",
+        json={
+            "parents": [
+                {"full_name": "Только Мать", "phone": "333"},
+                {"full_name": "", "phone": ""},
+            ],
+        },
+    )
+    assert response.status_code == 200
+    parents = response.json()["parents"]
+    assert len(parents) == 1
+    assert parents[0]["full_name"] == "Только Мать"
+    assert parents[0]["phone"] == "333"
+
+
+def test_student_ui_shows_profile_form(client: TestClient) -> None:
+    student = client.post("/api/students", json={"full_name": "Карточка Ученик"}).json()
+    response = client.get(f"/students-ui/{student['id']}")
+    assert response.status_code == 200
+    assert "Данные ученика" in response.text
+    assert "passportNumber" in response.text
+    assert "parent1Name" in response.text
+    assert "profileForm" in response.text
+    assert "Полная оплата" in response.text
+    assert "Пропуск месяца" in response.text
+    assert "skipMonthSelect" in response.text
+
+
+def test_student_month_skip_crud(client: TestClient) -> None:
+    student = client.post("/api/students", json={"full_name": "Пропуск Ученик"}).json()
+
+    create = client.post(
+        f"/api/students/{student['id']}/month-skips",
+        json={"period": "2026-09"},
+    )
+    assert create.status_code == 201
+    assert create.json()["period"] == "2026-09"
+    assert create.json()["student_id"] == student["id"]
+
+    listed = client.get(f"/api/students/{student['id']}/month-skips")
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+
+    by_period = client.get("/api/students/month-skips", params={"period": "2026-09"})
+    assert by_period.status_code == 200
+    assert len(by_period.json()) == 1
+
+    delete = client.delete(f"/api/students/{student['id']}/month-skips/2026-09")
+    assert delete.status_code == 204
+    assert client.get(f"/api/students/{student['id']}/month-skips").json() == []
+
+
+def test_student_month_skip_rejects_tournament(client: TestClient) -> None:
+    student = client.post("/api/students", json={"full_name": "Турнир Ученик"}).json()
+    response = client.post(
+        f"/api/students/{student['id']}/month-skips",
+        json={"period": "tournament"},
+    )
+    assert response.status_code == 422

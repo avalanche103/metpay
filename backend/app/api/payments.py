@@ -110,6 +110,9 @@ def update_payment(
             raise HTTPException(status_code=422, detail="Invalid payment_for value")
         payment.payment_for = payment_for
 
+    if "counts_as_full" in updates:
+        payment.counts_as_full = bool(updates["counts_as_full"])
+
     db.commit()
     db.refresh(payment)
     return payment

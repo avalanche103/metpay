@@ -14,8 +14,10 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    create_db_and_tables()
+    # Migrations first: create_all before upgrade can create new tables from models
+    # while alembic_version lags, leaving batch_alter mid-flight leftovers on SQLite.
     run_migrations()
+    create_db_and_tables()
     db = SessionLocal()
     try:
         ensure_default_groups(db)

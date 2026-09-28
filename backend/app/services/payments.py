@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 import uuid
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ArtPayEvent, Payment, PaymentSource, PaymentStatus, Student, UnmatchedPayment
 from app.services.payment_matching import find_student_for_payer, normalize_full_name
-
+from app.services.season_periods import is_valid_payment_for, season_for_period
 
 def extract_payer_full_name(payload: dict[str, Any]) -> str | None:
     for key in (
@@ -129,6 +129,49 @@ def create_payment_from_artpay_payload(db: Session, payload: dict[str, Any]) -> 
         )
 
     db.add(payment)
+    return payment
+
+
+def create_manual_payment(
+    db: Session,
+    *,
+    student: Student,
+    amount: Decimal,
+    paid_at: date,
+    payment_for: str,
+    season: str | None = None,
+    counts_as_full: bool = False,
+    currency: str = "BYN",
+) -> Payment:
+    resolved_season = season or season_for_period(payment_for)
+    if not is_valid_payment_for(payment_for, resolved_season):
+        raise ValueError(f"Некорректная цель оплаты: {payment_for}")
+
+    paid_at_dt = datetime(paid_at.year, paid_at.month, paid_at.day, tzinfo=UTC)
+    amount = amount.quantize(Decimal("0.01"))
+    if amount <= 0:
+        raise ValueError("Сумма должна быть больше 0")
+
+    payment = Payment(
+        student_id=student.id,
+        payer_full_name=student.full_name,
+        normalized_payer_full_name=normalize_full_name(student.full_name),
+        amount=amount,
+        currency=(currency or "BYN").upper(),
+        paid_at=paid_at_dt,
+        status=PaymentStatus.matched,
+        source=PaymentSource.manual,
+        season=resolved_season,
+        payment_for=payment_for,
+        counts_as_full=counts_as_full,
+        raw_payload={
+            "manual": True,
+            "student_id": student.id,
+            "created_via": "student_card",
+        },
+    )
+    db.add(payment)
+    db.flush()
     return payment
 
 

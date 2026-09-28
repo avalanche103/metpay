@@ -80,3 +80,12 @@ def is_valid_payment_for(value: str | None, season: str | None = None) -> bool:
         return True
     allowed = {item.value for item in payment_for_options(season)}
     return value in allowed
+
+
+def season_for_period(period: str | None) -> str | None:
+    if not period or period == TOURNAMENT_KEY:
+        return None
+    for season, period_list in SEASON_PERIODS.items():
+        if any(key == period for key, _ in period_list):
+            return season
+    return None

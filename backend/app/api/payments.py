@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -8,12 +8,13 @@ from app.schemas import (
     ClipboardImportRequest,
     ClipboardImportResult,
     ManualMatchRequest,
+    PaymentCreate,
     PaymentRead,
     PaymentSplitRequest,
     PaymentUpdate,
 )
 from app.services.import_payments import import_season_payments_from_text
-from app.services.payments import manually_match_payment, split_payment
+from app.services.payments import create_manual_payment, manually_match_payment, split_payment
 from app.services.season_periods import is_valid_payment_for, payment_for_options
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -55,6 +56,34 @@ def import_payments_from_clipboard(
         payments_matched=result.payments_matched,
         payments_needs_review=result.payments_needs_review,
     )
+
+
+@router.post("", response_model=PaymentRead, status_code=status.HTTP_201_CREATED)
+def create_payment(
+    payload: PaymentCreate,
+    db: Session = Depends(get_db),
+) -> Payment:
+    student = db.get(Student, payload.student_id)
+    if not student:
+        raise HTTPException(status_code=404, detail="Student was not found")
+
+    try:
+        payment = create_manual_payment(
+            db,
+            student=student,
+            amount=payload.amount,
+            paid_at=payload.paid_at,
+            payment_for=payload.payment_for,
+            season=payload.season,
+            counts_as_full=payload.counts_as_full,
+            currency=payload.currency,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    db.commit()
+    db.refresh(payment)
+    return payment
 
 
 @router.get("", response_model=list[PaymentRead])

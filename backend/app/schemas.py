@@ -104,6 +104,16 @@ class PaymentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PaymentCreate(BaseModel):
+    student_id: int
+    amount: Decimal = Field(gt=0)
+    paid_at: date
+    payment_for: str
+    season: str | None = None
+    counts_as_full: bool = False
+    currency: str = "BYN"
+
+
 class PaymentUpdate(BaseModel):
     payment_for: str | None = None
     counts_as_full: bool | None = None

@@ -291,6 +291,7 @@ GROUPS_UI_HTML = """
     <nav class="app-nav" aria-label="Разделы">
       <a href="/payments-ui">Платежи</a>
       <a href="/groups-ui" class="active">Группы</a>
+      <a href="/unpaid-ui">Неоплаченные</a>
     </nav>
     <header>
       <div>

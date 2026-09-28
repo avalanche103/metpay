@@ -102,6 +102,48 @@ def test_payment_counts_as_full_can_be_toggled(client: TestClient) -> None:
     assert response.json()["counts_as_full"] is False
 
 
+def test_manual_payment_can_be_created_for_student(client: TestClient) -> None:
+    student = client.post("/api/students", json={"full_name": "Ручной Плательщик"}).json()
+
+    response = client.post(
+        "/api/payments",
+        json={
+            "student_id": student["id"],
+            "amount": "95.00",
+            "paid_at": "2026-09-15",
+            "payment_for": "2026-09",
+        },
+    )
+    assert response.status_code == 201
+    payment = response.json()
+    assert payment["student_id"] == student["id"]
+    assert payment["amount"] == "95.00"
+    assert payment["payment_for"] == "2026-09"
+    assert payment["season"] == "2026/2027"
+    assert payment["source"] == "manual"
+    assert payment["status"] == "matched"
+    assert payment["paid_at"].startswith("2026-09-15")
+    assert payment["payer_full_name"] == "Ручной Плательщик"
+
+    listed = client.get("/api/payments", params={"student_id": student["id"]}).json()
+    assert len(listed) == 1
+    assert listed[0]["id"] == payment["id"]
+
+
+def test_manual_payment_rejects_invalid_month(client: TestClient) -> None:
+    student = client.post("/api/students", json={"full_name": "Неверный Месяц"}).json()
+    response = client.post(
+        "/api/payments",
+        json={
+            "student_id": student["id"],
+            "amount": "50.00",
+            "paid_at": "2026-09-15",
+            "payment_for": "2099-01",
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_payment_can_be_split_into_parts(client: TestClient) -> None:
     created = client.post(
         "/api/webhooks/artpay",

@@ -33,6 +33,7 @@ class PaymentStatus(StrEnum):
 class PaymentSource(StrEnum):
     webhook = "webhook"
     import_ = "import"
+    manual = "manual"
 
 
 class TimestampMixin:

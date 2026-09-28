@@ -1,12 +1,14 @@
 from datetime import datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models import Group, Payment, PaymentSource, PaymentStatus, Student
+from app.services.season_periods import TOURNAMENT_KEY, is_valid_payment_for
+from app.services.unpaid_report import build_unpaid_by_month_report
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -115,6 +117,25 @@ def payments_by_month(
         )
 
     return sorted(totals.values(), key=lambda item: item["month"])
+
+
+@router.get("/unpaid-by-month")
+def unpaid_by_month(
+    period: str,
+    group_id: int | None = None,
+    status: str = "not_full",
+    db: Session = Depends(get_db),
+) -> dict:
+    if period == TOURNAMENT_KEY or not is_valid_payment_for(period):
+        raise HTTPException(status_code=422, detail="Укажите корректный месяц оплаты")
+    if group_id is not None and db.get(Group, group_id) is None:
+        raise HTTPException(status_code=404, detail="Group was not found")
+    try:
+        return build_unpaid_by_month_report(
+            db, period=period, group_id=group_id, status_filter=status
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/needs-review")

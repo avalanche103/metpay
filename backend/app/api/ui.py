@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from app.api.groups_ui_page import GROUPS_UI_HTML
+from app.api.unpaid_ui_page import UNPAID_UI_HTML
 
 router = APIRouter(tags=["ui"])
 
@@ -386,6 +387,7 @@ def payments_ui() -> str:
     <nav class="app-nav" aria-label="Разделы">
       <a href="/payments-ui" class="active">Платежи</a>
       <a href="/groups-ui">Группы</a>
+      <a href="/unpaid-ui">Неоплаченные</a>
     </nav>
     <header>
       <div>
@@ -1539,6 +1541,40 @@ def student_payments_ui(student_id: int) -> str:
       font-size: 12px;
       font-weight: 500;
     }
+    .manual-pay-form {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 10px 12px;
+      width: 100%;
+      padding-top: 4px;
+      border-top: 1px dashed var(--line);
+    }
+    .manual-pay-form .field {
+      gap: 4px;
+      min-width: 120px;
+    }
+    .manual-pay-form .field label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .manual-pay-form input,
+    .manual-pay-form select {
+      width: auto;
+      min-width: 140px;
+    }
+    .manual-pay-form .field.amount-field input {
+      width: 110px;
+      min-width: 110px;
+    }
+    .manual-pay-status {
+      font-size: 13px;
+      color: var(--muted);
+      width: 100%;
+    }
+    .manual-pay-status.error { color: #c0392b; }
+    .manual-pay-status.ok { color: #1f7a4d; }
     .full-pay-cell {
       white-space: nowrap;
     }
@@ -1569,6 +1605,7 @@ def student_payments_ui(student_id: int) -> str:
     <nav class="app-nav" aria-label="Разделы">
       <a href="/payments-ui">Платежи</a>
       <a href="/groups-ui">Группы</a>
+      <a href="/unpaid-ui">Неоплаченные</a>
     </nav>
     <header>
       <div>
@@ -1587,6 +1624,22 @@ def student_payments_ui(student_id: int) -> str:
         </div>
         <div class="toolbar-meta muted" id="lastUpdated">Еще не обновлялось</div>
         <div class="skip-list" id="skipList"></div>
+        <form class="manual-pay-form" id="manualPayForm">
+          <div class="field amount-field">
+            <label for="manualAmount">Сумма</label>
+            <input type="number" id="manualAmount" name="amount" min="0.01" step="0.01" required placeholder="0.00">
+          </div>
+          <div class="field">
+            <label for="manualPaidAt">Дата оплаты</label>
+            <input type="date" id="manualPaidAt" name="paid_at" required>
+          </div>
+          <div class="field">
+            <label for="manualPaymentFor">Месяц</label>
+            <select id="manualPaymentFor" name="payment_for" required></select>
+          </div>
+          <button type="submit" id="manualPayBtn">Добавить оплату</button>
+          <div class="manual-pay-status" id="manualPayStatus" aria-live="polite"></div>
+        </form>
       </div>
       <div class="table-wrap">
         <table>
@@ -1687,11 +1740,21 @@ def student_payments_ui(student_id: int) -> str:
     const skipMonthSelect = document.querySelector("#skipMonthSelect");
     const addSkipBtn = document.querySelector("#addSkipBtn");
     const skipList = document.querySelector("#skipList");
+    const manualPayForm = document.querySelector("#manualPayForm");
+    const manualAmount = document.querySelector("#manualAmount");
+    const manualPaidAt = document.querySelector("#manualPaidAt");
+    const manualPaymentFor = document.querySelector("#manualPaymentFor");
+    const manualPayBtn = document.querySelector("#manualPayBtn");
+    const manualPayStatus = document.querySelector("#manualPayStatus");
     const paymentForOptionsBySeason = new Map();
+    const CURRENT_SEASON = "2026/2027";
     let monthlyFee = null;
     let monthSkips = [];
     let monthOptions = [];
 
+    if (!manualPaidAt.value) {
+      manualPaidAt.value = new Date().toISOString().slice(0, 10);
+    }
     function formatDate(value) {
       if (!value) return "-";
       return new Intl.DateTimeFormat("ru-RU", {
@@ -1784,6 +1847,84 @@ def student_payments_ui(student_id: int) -> str:
         option.value = item.value;
         option.textContent = item.label;
         skipMonthSelect.appendChild(option);
+      }
+    }
+
+    function fillManualPaymentForSelect() {
+      const previous = manualPaymentFor.value;
+      const paidMonth = (manualPaidAt.value || "").slice(0, 7);
+      manualPaymentFor.replaceChildren();
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Выберите месяц";
+      manualPaymentFor.appendChild(placeholder);
+      for (const item of monthOptions) {
+        const option = document.createElement("option");
+        option.value = item.value;
+        option.textContent = item.label;
+        manualPaymentFor.appendChild(option);
+      }
+      const values = new Set([...manualPaymentFor.options].map((item) => item.value));
+      if (previous && values.has(previous)) {
+        manualPaymentFor.value = previous;
+      } else if (paidMonth && values.has(paidMonth)) {
+        manualPaymentFor.value = paidMonth;
+      } else {
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        if (values.has(currentMonth)) {
+          manualPaymentFor.value = currentMonth;
+        }
+      }
+    }
+
+    function setManualPayStatus(message, kind) {
+      manualPayStatus.textContent = message || "";
+      manualPayStatus.className = "manual-pay-status" + (kind ? " " + kind : "");
+    }
+
+    async function addManualPayment(event) {
+      event.preventDefault();
+      const amount = Number(manualAmount.value);
+      const paidAt = manualPaidAt.value;
+      const paymentFor = manualPaymentFor.value;
+      if (!Number.isFinite(amount) || amount <= 0) {
+        setManualPayStatus("Укажите сумму больше 0", "error");
+        return;
+      }
+      if (!paidAt) {
+        setManualPayStatus("Укажите дату оплаты", "error");
+        return;
+      }
+      if (!paymentFor) {
+        setManualPayStatus("Выберите месяц", "error");
+        return;
+      }
+      manualPayBtn.disabled = true;
+      setManualPayStatus("Сохранение…");
+      try {
+        const response = await fetch("/api/payments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            student_id: studentId,
+            amount,
+            paid_at: paidAt,
+            payment_for: paymentFor,
+          }),
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(
+            typeof body.detail === "string" ? body.detail : "Не удалось добавить оплату"
+          );
+        }
+        manualAmount.value = "";
+        setManualPayStatus("Оплата добавлена", "ok");
+        await loadStudentPayments();
+      } catch (error) {
+        setManualPayStatus(error.message, "error");
+      } finally {
+        manualPayBtn.disabled = false;
       }
     }
 
@@ -1963,7 +2104,7 @@ def student_payments_ui(student_id: int) -> str:
           fetch(`/api/payments?student_id=${studentId}`),
           fetch("/api/groups"),
           fetch(`/api/students/${studentId}/month-skips`),
-          fetch("/api/payments/payment-for-options"),
+          fetch(`/api/payments/payment-for-options?season=${encodeURIComponent(CURRENT_SEASON)}`),
         ]);
       if (!studentResponse.ok) throw new Error("Ученик не найден");
       if (!paymentsResponse.ok) throw new Error("Не удалось загрузить платежи");
@@ -1984,6 +2125,7 @@ def student_payments_ui(student_id: int) -> str:
         (student.group_name ? ` · группа ${student.group_name}` : "");
       fillProfileForm(student);
       fillSkipMonthSelect();
+      fillManualPaymentForSelect();
       renderSkipList();
       await renderPayments(payments);
       lastUpdated.textContent = "Обновлено: " + formatDate(new Date().toISOString());
@@ -1993,6 +2135,17 @@ def student_payments_ui(student_id: int) -> str:
       addSkip().catch((error) => {
         lastUpdated.textContent = error.message;
       });
+    });
+
+    manualPayForm.addEventListener("submit", (event) => {
+      addManualPayment(event);
+    });
+
+    manualPaidAt.addEventListener("change", () => {
+      const paidMonth = (manualPaidAt.value || "").slice(0, 7);
+      if (paidMonth && [...manualPaymentFor.options].some((item) => item.value === paidMonth)) {
+        manualPaymentFor.value = paidMonth;
+      }
     });
 
     profileForm.addEventListener("submit", async (event) => {
@@ -2039,4 +2192,9 @@ def student_payments_ui(student_id: int) -> str:
 @router.get("/groups-ui", response_class=HTMLResponse, include_in_schema=False)
 def groups_ui() -> str:
     return GROUPS_UI_HTML
+
+
+@router.get("/unpaid-ui", response_class=HTMLResponse, include_in_schema=False)
+def unpaid_ui() -> str:
+    return UNPAID_UI_HTML
 

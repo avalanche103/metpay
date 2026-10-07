@@ -74,6 +74,41 @@ def test_unpaid_by_month_lists_unpaid_and_partial(client: TestClient) -> None:
     assert skipped["full_name"] not in names
 
 
+def test_unpaid_by_month_uses_student_monthly_fee(client: TestClient) -> None:
+    group = _create_group(client, "Группа со скидкой", fee="140.00")
+    discounted = _create_student(client, "Скидочный Ученик", group["id"])
+    regular = _create_student(client, "Обычный Ученик", group["id"])
+
+    assert (
+        client.patch(
+            f"/api/students/{discounted['id']}",
+            json={"monthly_fee": "100.00"},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/payments",
+            json={
+                "student_id": discounted["id"],
+                "amount": "100.00",
+                "paid_at": "2026-09-10",
+                "payment_for": "2026-09",
+            },
+        ).status_code
+        == 201
+    )
+
+    response = client.get("/api/reports/unpaid-by-month", params={"period": "2026-09"})
+    assert response.status_code == 200
+    body = response.json()
+    names = {item["student_full_name"]: item for item in body["items"]}
+    assert "Скидочный Ученик" not in names
+    assert names["Обычный Ученик"]["status"] == "unpaid"
+    assert names["Обычный Ученик"]["monthly_fee"] == "140.00"
+    assert names["Обычный Ученик"]["expected_amount"] == "140.00"
+
+
 def test_unpaid_by_month_respects_counts_as_full(client: TestClient) -> None:
     group = _create_group(client, "Полный кредит")
     student = _create_student(client, "Кредитный Ученик", group["id"])

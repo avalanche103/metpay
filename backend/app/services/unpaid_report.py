@@ -15,6 +15,16 @@ def payment_period_key(payment: Payment) -> str | None:
     return payment.paid_at.strftime("%Y-%m")
 
 
+def effective_monthly_fee(student: Student) -> Decimal | None:
+    """Per-student fee overrides group fee when set (discount / custom price)."""
+    if student.monthly_fee is not None:
+        return Decimal(str(student.monthly_fee))
+    group: Group | None = student.group
+    if group and group.monthly_fee is not None:
+        return Decimal(str(group.monthly_fee))
+    return None
+
+
 def build_unpaid_by_month_report(
     db: Session,
     *,
@@ -68,7 +78,7 @@ def build_unpaid_by_month_report(
             continue
 
         group: Group | None = student.group
-        fee = Decimal(str(group.monthly_fee)) if group and group.monthly_fee is not None else None
+        fee = effective_monthly_fee(student)
         paid = paid_by_student.get(student.id, Decimal("0.00")).quantize(Decimal("0.01"))
 
         if fee is not None and paid + Decimal("0.001") >= fee:

@@ -33,6 +33,7 @@ class StudentCreate(BaseModel):
     full_name: str
     group_id: int | None = None
     active: bool = True
+    monthly_fee: Decimal | None = Field(default=None, ge=0)
     birth_date: date | None = None
     passport_number: str | None = None
     passport_personal_number: str | None = None
@@ -47,6 +48,7 @@ class StudentUpdate(BaseModel):
     full_name: str | None = None
     group_id: int | None = None
     active: bool | None = None
+    monthly_fee: Decimal | None = Field(default=None, ge=0)
     birth_date: date | None = None
     passport_number: str | None = None
     passport_personal_number: str | None = None
@@ -73,6 +75,7 @@ class StudentRead(BaseModel):
     group_id: int | None
     group_name: str | None = None
     active: bool
+    monthly_fee: Decimal | None = None
     birth_date: date | None = None
     passport_number: str | None = None
     passport_personal_number: str | None = None
@@ -95,6 +98,7 @@ class PaymentRead(BaseModel):
     source: PaymentSource
     season: str | None
     payment_for: str | None
+    note: str | None = None
     counts_as_full: bool = False
     split_group_id: str | None = None
     ap_erip_service_no: str | None
@@ -109,6 +113,7 @@ class PaymentCreate(BaseModel):
     amount: Decimal = Field(gt=0)
     paid_at: date
     payment_for: str
+    note: str | None = Field(default=None, max_length=255)
     season: str | None = None
     counts_as_full: bool = False
     currency: str = "BYN"
@@ -133,6 +138,7 @@ class MonthSkipRead(BaseModel):
 class PaymentSplitPart(BaseModel):
     amount: Decimal = Field(gt=0)
     payment_for: str | None = None
+    student_id: int | None = None
 
 
 class PaymentSplitRequest(BaseModel):

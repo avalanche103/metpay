@@ -79,6 +79,50 @@ def test_student_group_can_be_assigned_from_api(client: TestClient) -> None:
     assert payload["group_name"] == "2018"
 
 
+def test_student_can_be_deleted(client: TestClient) -> None:
+    group = client.post(
+        "/api/groups",
+        json={"name": "На удаление", "monthly_fee": "100.00"},
+    ).json()
+    student = client.post(
+        "/api/students",
+        json={"full_name": "Удаляемый Ученик", "group_id": group["id"]},
+    ).json()
+    assert student["active"] is True
+    assert student["group_id"] == group["id"]
+
+    response = client.delete(f"/api/students/{student['id']}")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["active"] is False
+    assert payload["group_id"] is None
+
+    again = client.delete(f"/api/students/{student['id']}")
+    assert again.status_code == 422
+
+
+def test_student_monthly_fee_can_be_updated(client: TestClient) -> None:
+    student = client.post(
+        "/api/students",
+        json={"full_name": "Ученик Со Скидкой"},
+    ).json()
+    assert student["monthly_fee"] is None
+
+    response = client.patch(
+        f"/api/students/{student['id']}",
+        json={"monthly_fee": "95.50"},
+    )
+    assert response.status_code == 200
+    assert response.json()["monthly_fee"] == "95.50"
+
+    cleared = client.patch(
+        f"/api/students/{student['id']}",
+        json={"monthly_fee": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["monthly_fee"] is None
+
+
 def test_student_full_name_can_be_updated(client: TestClient) -> None:
     student = client.post(
         "/api/students",
@@ -243,6 +287,9 @@ def test_student_ui_shows_profile_form(client: TestClient) -> None:
     response = client.get(f"/students-ui/{student['id']}")
     assert response.status_code == 200
     assert "Данные ученика" in response.text
+    assert 'id="studentFullName"' in response.text
+    assert 'id="studentMonthlyFee"' in response.text
+    assert 'id="deleteStudentBtn"' in response.text
     assert "passportNumber" in response.text
     assert "parent1Name" in response.text
     assert "profileForm" in response.text

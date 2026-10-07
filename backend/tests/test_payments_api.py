@@ -112,6 +112,7 @@ def test_manual_payment_can_be_created_for_student(client: TestClient) -> None:
             "amount": "95.00",
             "paid_at": "2026-09-15",
             "payment_for": "2026-09",
+            "note": "  наличные  ",
         },
     )
     assert response.status_code == 201
@@ -119,6 +120,7 @@ def test_manual_payment_can_be_created_for_student(client: TestClient) -> None:
     assert payment["student_id"] == student["id"]
     assert payment["amount"] == "95.00"
     assert payment["payment_for"] == "2026-09"
+    assert payment["note"] == "наличные"
     assert payment["season"] == "2026/2027"
     assert payment["source"] == "manual"
     assert payment["status"] == "matched"
@@ -128,6 +130,7 @@ def test_manual_payment_can_be_created_for_student(client: TestClient) -> None:
     listed = client.get("/api/payments", params={"student_id": student["id"]}).json()
     assert len(listed) == 1
     assert listed[0]["id"] == payment["id"]
+    assert listed[0]["note"] == "наличные"
 
 
 def test_manual_payment_rejects_invalid_month(client: TestClient) -> None:
@@ -178,6 +181,53 @@ def test_payment_can_be_split_into_parts(client: TestClient) -> None:
     split_ids = {part["id"] for part in parts}
     assert split_ids.issubset({item["id"] for item in listed})
     assert len([item for item in listed if item["id"] in split_ids]) == 2
+
+
+def test_payment_can_be_split_by_students(client: TestClient) -> None:
+    brother_a = client.post(
+        "/api/students",
+        json={"full_name": "Иванов Пётр"},
+    ).json()
+    brother_b = client.post(
+        "/api/students",
+        json={"full_name": "Иванов Иван"},
+    ).json()
+    created = client.post(
+        "/api/webhooks/artpay",
+        json={
+            "ap_amount": "240.00",
+            "ap_currency": "BYN",
+            "ap_erip_trn_id": "payment-split-brothers",
+            "ap_erip_trn_state": "Paid",
+            "up_student_fio": "Иванов Родитель",
+        },
+    ).json()
+    payment_id = created["payment_id"]
+
+    response = client.post(
+        f"/api/payments/{payment_id}/split",
+        json={
+            "parts": [
+                {
+                    "amount": "120.00",
+                    "payment_for": "2026-09",
+                    "student_id": brother_a["id"],
+                },
+                {
+                    "amount": "120.00",
+                    "payment_for": "2026-09",
+                    "student_id": brother_b["id"],
+                },
+            ]
+        },
+    )
+    assert response.status_code == 200
+    parts = response.json()
+    assert len(parts) == 2
+    assert {part["student_id"] for part in parts} == {brother_a["id"], brother_b["id"]}
+    assert all(part["payment_for"] == "2026-09" for part in parts)
+    assert all(part["status"] == "matched" for part in parts)
+    assert len({part["split_group_id"] for part in parts}) == 1
 
 
 def test_payment_split_rejects_wrong_sum(client: TestClient) -> None:

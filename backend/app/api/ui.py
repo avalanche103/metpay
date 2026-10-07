@@ -186,6 +186,9 @@ def payments_ui() -> str:
       padding: 20px;
       box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
     }
+    .modal-card.split-modal-card {
+      width: min(720px, 100%);
+    }
     .modal-card h3 {
       margin: 0 0 8px;
     }
@@ -520,9 +523,10 @@ def payments_ui() -> str:
   </div>
 
   <div id="splitEditor" class="modal" hidden>
-    <div class="modal-card" role="dialog" aria-labelledby="splitEditorTitle">
+    <div class="modal-card split-modal-card" role="dialog" aria-labelledby="splitEditorTitle">
       <h3 id="splitEditorTitle">Разбить платёж</h3>
       <p class="muted" id="splitEditorInfo"></p>
+      <p class="muted" style="margin-top:0;">Можно разбить по месяцам и/или по ученикам (например, оплата за двух братьев).</p>
       <div id="splitParts"></div>
       <div class="modal-actions" style="justify-content: space-between;">
         <button type="button" id="splitAddPart" class="btn-secondary">Добавить часть</button>
@@ -695,7 +699,7 @@ def payments_ui() -> str:
       splitBtn.type = "button";
       splitBtn.className = "btn-secondary btn-icon";
       splitBtn.textContent = "Разбить";
-      splitBtn.title = "Разбить платёж на части по месяцам";
+      splitBtn.title = "Разбить платёж на части по месяцам или по ученикам";
       splitBtn.addEventListener("click", () => openSplitEditor(payment));
       wrap.append(select, splitBtn);
       td.appendChild(wrap);
@@ -714,11 +718,11 @@ def payments_ui() -> str:
       splitEditorError.textContent = "";
     }
 
-    function createSplitPartRow(amount, paymentFor) {
+    function createSplitPartRow(amount, paymentFor, studentId) {
       const row = document.createElement("div");
       row.className = "modal-field";
       row.style.display = "grid";
-      row.style.gridTemplateColumns = "120px 1fr auto";
+      row.style.gridTemplateColumns = "110px minmax(140px, 1fr) minmax(160px, 1.2fr) auto";
       row.style.gap = "8px";
       row.style.alignItems = "end";
 
@@ -731,13 +735,13 @@ def payments_ui() -> str:
       amountInput.min = "0.01";
       amountInput.step = "0.01";
       amountInput.className = "split-amount";
-      amountInput.value = amount != null ? Number(amount).toFixed(2) : "";
+      amountInput.value = amount != null && amount !== "" ? Number(amount).toFixed(2) : "";
       amountLabel.appendChild(amountInput);
 
       const forLabel = document.createElement("label");
       forLabel.style.display = "grid";
       forLabel.style.gap = "4px";
-      forLabel.innerHTML = "<span>Оплата за</span>";
+      forLabel.innerHTML = "<span>Месяц</span>";
       const forSelect = document.createElement("select");
       forSelect.className = "split-payment-for";
       const empty = document.createElement("option");
@@ -754,6 +758,29 @@ def payments_ui() -> str:
       }
       forLabel.appendChild(forSelect);
 
+      const studentLabel = document.createElement("label");
+      studentLabel.style.display = "grid";
+      studentLabel.style.gap = "4px";
+      studentLabel.innerHTML = "<span>Ученик</span>";
+      const studentSelect = document.createElement("select");
+      studentSelect.className = "split-student-id";
+      const studentEmpty = document.createElement("option");
+      studentEmpty.value = "";
+      studentEmpty.textContent = "— без привязки —";
+      studentSelect.appendChild(studentEmpty);
+      const selectedId = studentId != null ? Number(studentId) : null;
+      const students = Array.from(studentsById.values())
+        .filter((item) => item.active || item.id === selectedId)
+        .sort((a, b) => a.full_name.localeCompare(b.full_name, "ru"));
+      for (const student of students) {
+        const option = document.createElement("option");
+        option.value = String(student.id);
+        option.textContent = student.full_name;
+        if (selectedId === student.id) option.selected = true;
+        studentSelect.appendChild(option);
+      }
+      studentLabel.appendChild(studentSelect);
+
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "btn-secondary btn-icon";
@@ -768,7 +795,7 @@ def payments_ui() -> str:
       });
 
       amountInput.addEventListener("input", updateSplitSumHint);
-      row.append(amountLabel, forLabel, removeBtn);
+      row.append(amountLabel, forLabel, studentLabel, removeBtn);
       return row;
     }
 
@@ -789,9 +816,10 @@ def payments_ui() -> str:
       splitContext = { payment, options };
       splitParts.replaceChildren();
       const half = (Number(payment.amount) / 2).toFixed(2);
+      const studentId = payment.student_id || null;
       splitParts.append(
-        createSplitPartRow(half, payment.payment_for || null),
-        createSplitPartRow(half, null)
+        createSplitPartRow(half, payment.payment_for || null, studentId),
+        createSplitPartRow(half, payment.payment_for || null, studentId)
       );
       splitEditorError.textContent = "";
       updateSplitSumHint();
@@ -803,7 +831,9 @@ def payments_ui() -> str:
       const parts = [...splitParts.children].map((row) => {
         const amount = row.querySelector(".split-amount").value;
         const paymentFor = row.querySelector(".split-payment-for").value || null;
-        return { amount, payment_for: paymentFor };
+        const studentRaw = row.querySelector(".split-student-id").value;
+        const studentId = studentRaw ? Number(studentRaw) : null;
+        return { amount, payment_for: paymentFor, student_id: studentId };
       });
       if (parts.length < 2) {
         splitEditorError.textContent = "Нужно минимум 2 части";
@@ -927,7 +957,8 @@ def payments_ui() -> str:
       if (event.target === studentEditor) closeStudentEditor();
     });
     document.querySelector("#splitAddPart").addEventListener("click", () => {
-      splitParts.appendChild(createSplitPartRow("", null));
+      const studentId = splitContext?.payment?.student_id || null;
+      splitParts.appendChild(createSplitPartRow("", null, studentId));
       updateSplitSumHint();
     });
     document.querySelector("#splitSave").addEventListener("click", () => {
@@ -1396,6 +1427,11 @@ def student_payments_ui(student_id: int) -> str:
       border-color: var(--line);
       font-weight: 500;
     }
+    button.btn-danger {
+      background: #b91c1c;
+      border-color: #b91c1c;
+      color: #fff;
+    }
     button:disabled {
       opacity: 0.65;
       cursor: wait;
@@ -1493,6 +1529,9 @@ def student_payments_ui(student_id: int) -> str:
       gap: 12px;
       flex-wrap: wrap;
     }
+    .profile-actions .spacer {
+      flex: 1 1 auto;
+    }
     .profile-status {
       font-size: 13px;
       color: var(--muted);
@@ -1568,6 +1607,14 @@ def student_payments_ui(student_id: int) -> str:
       width: 110px;
       min-width: 110px;
     }
+    .manual-pay-form .field.note-field {
+      flex: 1 1 180px;
+      min-width: 180px;
+    }
+    .manual-pay-form .field.note-field input {
+      width: 100%;
+      min-width: 180px;
+    }
     .manual-pay-status {
       font-size: 13px;
       color: var(--muted);
@@ -1637,6 +1684,10 @@ def student_payments_ui(student_id: int) -> str:
             <label for="manualPaymentFor">Месяц</label>
             <select id="manualPaymentFor" name="payment_for" required></select>
           </div>
+          <div class="field note-field">
+            <label for="manualNote">Способ оплаты</label>
+            <input type="text" id="manualNote" name="note" maxlength="255" placeholder="наличные, перевод, карта…">
+          </div>
           <button type="submit" id="manualPayBtn">Добавить оплату</button>
           <div class="manual-pay-status" id="manualPayStatus" aria-live="polite"></div>
         </form>
@@ -1650,6 +1701,7 @@ def student_payments_ui(student_id: int) -> str:
               <th>ФИО из платежа</th>
               <th>Сезон</th>
               <th>Оплата</th>
+              <th>Способ оплаты</th>
               <th>Полная оплата</th>
             </tr>
           </thead>
@@ -1665,6 +1717,15 @@ def student_payments_ui(student_id: int) -> str:
       </div>
       <form class="profile-body" id="profileForm">
         <div class="field-grid">
+          <div class="field full">
+            <label for="studentFullName">ФИО</label>
+            <input type="text" id="studentFullName" name="full_name" required autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="studentMonthlyFee">Стоимость занятий (BYN)</label>
+            <input type="number" id="studentMonthlyFee" name="monthly_fee" min="0" step="0.01" placeholder="как в группе">
+            <span class="muted" style="font-size:12px;">Пусто = стоимость группы. Для скидки укажите свою сумму.</span>
+          </div>
           <div class="field">
             <label for="birthDate">Дата рождения</label>
             <input type="date" id="birthDate" name="birth_date">
@@ -1722,6 +1783,8 @@ def student_payments_ui(student_id: int) -> str:
         <div class="profile-actions">
           <button type="submit" id="saveProfile">Сохранить</button>
           <span class="profile-status" id="profileStatus"></span>
+          <span class="spacer"></span>
+          <button type="button" class="btn-danger" id="deleteStudentBtn">Удалить ученика</button>
         </div>
       </form>
     </section>
@@ -1737,6 +1800,8 @@ def student_payments_ui(student_id: int) -> str:
     const profileForm = document.querySelector("#profileForm");
     const profileStatus = document.querySelector("#profileStatus");
     const saveProfileBtn = document.querySelector("#saveProfile");
+    const deleteStudentBtn = document.querySelector("#deleteStudentBtn");
+    let currentStudentName = "";
     const skipMonthSelect = document.querySelector("#skipMonthSelect");
     const addSkipBtn = document.querySelector("#addSkipBtn");
     const skipList = document.querySelector("#skipList");
@@ -1744,11 +1809,13 @@ def student_payments_ui(student_id: int) -> str:
     const manualAmount = document.querySelector("#manualAmount");
     const manualPaidAt = document.querySelector("#manualPaidAt");
     const manualPaymentFor = document.querySelector("#manualPaymentFor");
+    const manualNote = document.querySelector("#manualNote");
     const manualPayBtn = document.querySelector("#manualPayBtn");
     const manualPayStatus = document.querySelector("#manualPayStatus");
     const paymentForOptionsBySeason = new Map();
     const CURRENT_SEASON = "2026/2027";
     let monthlyFee = null;
+    let groupMonthlyFee = null;
     let monthSkips = [];
     let monthOptions = [];
 
@@ -1774,6 +1841,11 @@ def student_payments_ui(student_id: int) -> str:
     }
 
     function fillProfileForm(student) {
+      profileForm.full_name.value = student.full_name || "";
+      profileForm.monthly_fee.value =
+        student.monthly_fee != null && student.monthly_fee !== ""
+          ? Number(student.monthly_fee).toFixed(2)
+          : "";
       profileForm.birth_date.value = student.birth_date || "";
       profileForm.educational_institution.value = student.educational_institution || "";
       profileForm.address.value = student.address || "";
@@ -1790,6 +1862,8 @@ def student_payments_ui(student_id: int) -> str:
     }
 
     function buildProfilePayload() {
+      const fullName = (profileForm.full_name.value || "").trim();
+      const feeRaw = (profileForm.monthly_fee.value || "").trim();
       const parents = [
         {
           full_name: emptyToNull(document.querySelector("#parent1Name").value),
@@ -1802,6 +1876,8 @@ def student_payments_ui(student_id: int) -> str:
       ].filter((parent) => parent.full_name || parent.phone);
 
       return {
+        full_name: fullName,
+        monthly_fee: feeRaw === "" ? null : feeRaw,
         birth_date: emptyToNull(profileForm.birth_date.value),
         educational_institution: emptyToNull(profileForm.educational_institution.value),
         address: emptyToNull(profileForm.address.value),
@@ -1887,6 +1963,7 @@ def student_payments_ui(student_id: int) -> str:
       const amount = Number(manualAmount.value);
       const paidAt = manualPaidAt.value;
       const paymentFor = manualPaymentFor.value;
+      const note = (manualNote.value || "").trim() || null;
       if (!Number.isFinite(amount) || amount <= 0) {
         setManualPayStatus("Укажите сумму больше 0", "error");
         return;
@@ -1910,6 +1987,7 @@ def student_payments_ui(student_id: int) -> str:
             amount,
             paid_at: paidAt,
             payment_for: paymentFor,
+            note,
           }),
         });
         if (!response.ok) {
@@ -1919,6 +1997,7 @@ def student_payments_ui(student_id: int) -> str:
           );
         }
         manualAmount.value = "";
+        manualNote.value = "";
         setManualPayStatus("Оплата добавлена", "ok");
         await loadStudentPayments();
       } catch (error) {
@@ -2088,6 +2167,10 @@ def student_payments_ui(student_id: int) -> str:
           }),
           Object.assign(document.createElement("td"), { textContent: payment.season || "-" }),
           createPaymentForSelect(payment, options),
+          Object.assign(document.createElement("td"), {
+            textContent: payment.note || "—",
+            className: payment.note ? "" : "full-pay-muted",
+          }),
           createFullPayCell(payment)
         );
         paymentsBody.appendChild(row);
@@ -2117,12 +2200,23 @@ def student_payments_ui(student_id: int) -> str:
       monthSkips = await skipsResponse.json();
       monthOptions = await optionsResponse.json();
       const group = groups.find((item) => item.id === student.group_id);
-      monthlyFee = group && group.monthly_fee != null ? Number(group.monthly_fee) : null;
+      groupMonthlyFee = group && group.monthly_fee != null ? Number(group.monthly_fee) : null;
+      monthlyFee =
+        student.monthly_fee != null && student.monthly_fee !== ""
+          ? Number(student.monthly_fee)
+          : groupMonthlyFee;
       studentTitle.textContent = student.full_name;
+      currentStudentName = student.full_name || "";
       const total = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+      const feeLabel =
+        monthlyFee != null
+          ? ` · занятия ${monthlyFee.toFixed(2)} BYN` +
+            (student.monthly_fee != null && student.monthly_fee !== "" ? " (индив.)" : "")
+          : "";
       studentSummary.textContent =
         `${payments.length} платеж(ей) · всего ${total.toFixed(2)} BYN` +
-        (student.group_name ? ` · группа ${student.group_name}` : "");
+        (student.group_name ? ` · группа ${student.group_name}` : "") +
+        feeLabel;
       fillProfileForm(student);
       fillSkipMonthSelect();
       fillManualPaymentForSelect();
@@ -2150,13 +2244,19 @@ def student_payments_ui(student_id: int) -> str:
 
     profileForm.addEventListener("submit", async (event) => {
       event.preventDefault();
+      const payload = buildProfilePayload();
+      if (!payload.full_name) {
+        setProfileStatus("Укажите ФИО", "error");
+        profileForm.full_name.focus();
+        return;
+      }
       saveProfileBtn.disabled = true;
       setProfileStatus("Сохранение…");
       try {
         const response = await fetch(`/api/students/${studentId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(buildProfilePayload()),
+          body: JSON.stringify(payload),
         });
         if (!response.ok) {
           const body = await response.json().catch(() => ({}));
@@ -2166,12 +2266,53 @@ def student_payments_ui(student_id: int) -> str:
         }
         const student = await response.json();
         fillProfileForm(student);
+        studentTitle.textContent = student.full_name;
+        currentStudentName = student.full_name || "";
+        monthlyFee =
+          student.monthly_fee != null && student.monthly_fee !== ""
+            ? Number(student.monthly_fee)
+            : groupMonthlyFee;
+        setProfileStatus("Сохранено", "ok");
+        await loadStudentPayments();
         setProfileStatus("Сохранено", "ok");
       } catch (error) {
         setProfileStatus(error.message, "error");
       } finally {
         saveProfileBtn.disabled = false;
       }
+    });
+
+    async function deleteStudent() {
+      const name = currentStudentName || "этого ученика";
+      const confirmed = window.confirm(
+        `Удалить ученика «${name}»?\n\nОн исчезнет из списков и групп. Платежи сохранятся.`
+      );
+      if (!confirmed) return;
+
+      deleteStudentBtn.disabled = true;
+      setProfileStatus("Удаление…");
+      try {
+        const response = await fetch(`/api/students/${studentId}`, {
+          method: "DELETE",
+        });
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          throw new Error(
+            typeof body.detail === "string" ? body.detail : "Не удалось удалить ученика"
+          );
+        }
+        window.location.href = "/groups-ui";
+      } catch (error) {
+        setProfileStatus(error.message, "error");
+        deleteStudentBtn.disabled = false;
+      }
+    }
+
+    deleteStudentBtn.addEventListener("click", () => {
+      deleteStudent().catch((error) => {
+        setProfileStatus(error.message, "error");
+        deleteStudentBtn.disabled = false;
+      });
     });
 
     document.querySelector("#refresh").addEventListener("click", () => {

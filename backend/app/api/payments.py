@@ -74,6 +74,7 @@ def create_payment(
             amount=payload.amount,
             paid_at=payload.paid_at,
             payment_for=payload.payment_for,
+            note=payload.note,
             season=payload.season,
             counts_as_full=payload.counts_as_full,
             currency=payload.currency,
@@ -165,12 +166,28 @@ def split_payment_endpoint(
                 status_code=422,
                 detail=f"Некорректная цель оплаты: {part.payment_for}",
             )
+        if part.student_id is not None and db.get(Student, part.student_id) is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Ученик #{part.student_id} не найден",
+            )
 
     try:
         parts = split_payment(
             db,
             payment,
-            [(part.amount, part.payment_for) for part in payload.parts],
+            [
+                (
+                    part.amount,
+                    part.payment_for,
+                    (
+                        part.student_id
+                        if "student_id" in part.model_fields_set
+                        else payment.student_id
+                    ),
+                )
+                for part in payload.parts
+            ],
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

@@ -14,3 +14,13 @@ def merge_students(db: Session, source: Student, target: Student) -> Student:
 
     source.active = False
     return target
+
+
+def delete_student(student: Student) -> Student:
+    """Deactivate a student and remove them from their group.
+
+    Payments stay linked for history; the student disappears from active lists.
+    """
+    student.active = False
+    student.group_id = None
+    return student

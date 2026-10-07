@@ -19,7 +19,7 @@ from app.services.payment_matching import (
     normalize_full_name,
 )
 from app.services.season_periods import TOURNAMENT_KEY, is_valid_payment_for
-from app.services.students import merge_students
+from app.services.students import delete_student, merge_students
 
 router = APIRouter(prefix="/students", tags=["students"])
 
@@ -59,6 +59,7 @@ def student_to_read(student: Student) -> StudentRead:
         group_id=student.group_id,
         group_name=student.group.name if student.group else None,
         active=student.active,
+        monthly_fee=student.monthly_fee,
         birth_date=student.birth_date,
         passport_number=student.passport_number,
         passport_personal_number=student.passport_personal_number,
@@ -91,6 +92,7 @@ def create_student(payload: StudentCreate, db: Session = Depends(get_db)) -> Stu
         normalized_full_name=normalize_full_name(formatted_name),
         group_id=payload.group_id,
         active=payload.active,
+        monthly_fee=payload.monthly_fee,
         birth_date=payload.birth_date,
         passport_number=payload.passport_number,
         passport_personal_number=payload.passport_personal_number,
@@ -253,6 +255,12 @@ def update_student(
     if "active" in updates:
         student.active = updates["active"]
 
+    if "monthly_fee" in updates:
+        fee = updates["monthly_fee"]
+        if fee is not None and fee < 0:
+            raise HTTPException(status_code=422, detail="Стоимость занятий не может быть отрицательной")
+        student.monthly_fee = fee
+
     for field in _PROFILE_FIELDS:
         if field in updates:
             setattr(student, field, updates[field])
@@ -264,6 +272,27 @@ def update_student(
     db.refresh(student)
     if student.group_id:
         db.refresh(student, attribute_names=["group"])
+    return student_to_read(student)
+
+
+@router.delete("/{student_id}", response_model=StudentRead)
+def delete_student_endpoint(
+    student_id: int,
+    db: Session = Depends(get_db),
+) -> StudentRead:
+    student = db.scalar(
+        select(Student)
+        .options(selectinload(Student.group), selectinload(Student.parents))
+        .where(Student.id == student_id)
+    )
+    if not student:
+        raise HTTPException(status_code=404, detail="Student was not found")
+    if not student.active:
+        raise HTTPException(status_code=422, detail="Ученик уже удалён")
+
+    delete_student(student)
+    db.commit()
+    db.refresh(student)
     return student_to_read(student)
 
 

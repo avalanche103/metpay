@@ -139,6 +139,7 @@ def create_manual_payment(
     amount: Decimal,
     paid_at: date,
     payment_for: str,
+    note: str | None = None,
     season: str | None = None,
     counts_as_full: bool = False,
     currency: str = "BYN",
@@ -152,6 +153,10 @@ def create_manual_payment(
     if amount <= 0:
         raise ValueError("Сумма должна быть больше 0")
 
+    cleaned_note = (note or "").strip() or None
+    if cleaned_note and len(cleaned_note) > 255:
+        raise ValueError("Примечание слишком длинное (макс. 255 символов)")
+
     payment = Payment(
         student_id=student.id,
         payer_full_name=student.full_name,
@@ -163,11 +168,13 @@ def create_manual_payment(
         source=PaymentSource.manual,
         season=resolved_season,
         payment_for=payment_for,
+        note=cleaned_note,
         counts_as_full=counts_as_full,
         raw_payload={
             "manual": True,
             "student_id": student.id,
             "created_via": "student_card",
+            "note": cleaned_note,
         },
     )
     db.add(payment)
@@ -183,47 +190,61 @@ def manually_match_payment(db: Session, payment: Payment, student: Student) -> P
     return payment
 
 
+def _apply_split_part_student(payment: Payment, student_id: int | None) -> None:
+    payment.student_id = student_id
+    if student_id is not None:
+        payment.status = PaymentStatus.matched
+        if payment.unmatched:
+            payment.unmatched.resolved_at = datetime.now(UTC)
+
+
 def split_payment(
     db: Session,
     payment: Payment,
-    parts: list[tuple[Decimal, str | None]],
+    parts: list[tuple[Decimal, str | None, int | None]],
 ) -> list[Payment]:
-    """Split one payment into several parts with their own payment_for values.
+    """Split one payment into several parts by month and/or student.
 
     The original row becomes the first part; additional part rows are created.
     """
     if len(parts) < 2:
         raise ValueError("Нужно минимум 2 части для разбиения")
 
-    quantized = [(amount.quantize(Decimal("0.01")), payment_for) for amount, payment_for in parts]
-    if any(amount <= 0 for amount, _ in quantized):
+    quantized = [
+        (amount.quantize(Decimal("0.01")), payment_for, student_id)
+        for amount, payment_for, student_id in parts
+    ]
+    if any(amount <= 0 for amount, _, _ in quantized):
         raise ValueError("Сумма каждой части должна быть больше 0")
 
-    total = sum((amount for amount, _ in quantized), Decimal("0.00"))
+    total = sum((amount for amount, _, _ in quantized), Decimal("0.00"))
     if total != payment.amount.quantize(Decimal("0.01")):
         raise ValueError(
             f"Сумма частей ({total}) должна равняться сумме платежа ({payment.amount})"
         )
 
     split_group_id = payment.split_group_id or f"split-{payment.id}-{uuid.uuid4().hex[:8]}"
-    first_amount, first_payment_for = quantized[0]
+    original_status = payment.status
+    first_amount, first_payment_for, first_student_id = quantized[0]
     payment.amount = first_amount
     payment.payment_for = first_payment_for
     payment.split_group_id = split_group_id
+    _apply_split_part_student(payment, first_student_id)
 
     created = [payment]
-    for index, (amount, payment_for) in enumerate(quantized[1:], start=2):
+    for index, (amount, payment_for, student_id) in enumerate(quantized[1:], start=2):
         child = Payment(
-            student_id=payment.student_id,
+            student_id=student_id,
             payer_full_name=payment.payer_full_name,
             normalized_payer_full_name=payment.normalized_payer_full_name,
             amount=amount,
             currency=payment.currency,
             paid_at=payment.paid_at,
-            status=payment.status,
+            status=PaymentStatus.matched if student_id is not None else original_status,
             source=payment.source,
             season=payment.season,
             payment_for=payment_for,
+            note=payment.note,
             import_batch_id=payment.import_batch_id,
             external_key=(
                 f"{payment.external_key}:part:{index}"

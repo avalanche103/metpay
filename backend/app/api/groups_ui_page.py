@@ -114,33 +114,35 @@ GROUPS_UI_HTML = """
     }
     .group-head {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       gap: 12px;
-      flex-wrap: wrap;
       padding: 14px 16px;
       border-bottom: 1px solid var(--line);
       background: color-mix(in srgb, var(--card), var(--bg) 35%);
     }
     .group-head-main {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
+      display: grid;
+      gap: 4px;
       min-width: 0;
+      flex: 1 1 auto;
     }
     .group-head h2 {
       margin: 0;
       font-size: 1.1rem;
+      line-height: 1.3;
     }
     .group-meta {
       color: var(--muted);
       font-size: 13px;
+      line-height: 1.4;
     }
     .group-actions {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: 8px;
+      flex: 0 0 auto;
+      align-items: center;
     }
     .table-wrap {
       overflow-x: auto;
@@ -148,12 +150,20 @@ GROUPS_UI_HTML = """
     table {
       width: 100%;
       border-collapse: collapse;
+      table-layout: fixed;
     }
     th, td {
       padding: 10px 14px;
       border-bottom: 1px solid var(--line);
       text-align: left;
       vertical-align: middle;
+    }
+    th:nth-child(1), td:nth-child(1) { width: 42%; }
+    th:nth-child(2), td:nth-child(2) { width: 22%; }
+    th:nth-child(3), td:nth-child(3) { width: 22%; }
+    th:nth-child(4), td:nth-child(4) {
+      width: 14%;
+      text-align: right;
     }
     th {
       color: var(--muted);
@@ -167,8 +177,18 @@ GROUPS_UI_HTML = """
       color: var(--accent);
       text-decoration: none;
       font-weight: 600;
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: bottom;
     }
     .student-link:hover { text-decoration: underline; }
+    td.actions-cell {
+      text-align: right;
+      white-space: nowrap;
+    }
     .status {
       display: inline-flex;
       align-items: center;
@@ -283,6 +303,13 @@ GROUPS_UI_HTML = """
     }
     @media (max-width: 760px) {
       header { flex-direction: column; align-items: stretch; }
+      .group-head {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .group-actions { justify-content: flex-start; }
+      th:nth-child(1), td:nth-child(1) { width: 36%; }
+      th:nth-child(4), td:nth-child(4) { width: 20%; }
     }
   </style>
 </head>
@@ -324,7 +351,7 @@ GROUPS_UI_HTML = """
             <tr>
               <th>Ученик</th>
               <th id="ungroupedMonthHead">Оплата</th>
-              <th>Сумма</th>
+              <th>Сумма / ожидаем</th>
               <th></th>
             </tr>
           </thead>
@@ -468,6 +495,13 @@ GROUPS_UI_HTML = """
       }
       fullCreditByStudentId = fullCredit;
       return map;
+    }
+
+    function effectiveMonthlyFee(student, groupFee) {
+      if (student && student.monthly_fee != null && student.monthly_fee !== "") {
+        return student.monthly_fee;
+      }
+      return groupFee;
     }
 
     function paymentStatus(studentId, amount, monthlyFee) {
@@ -668,13 +702,15 @@ GROUPS_UI_HTML = """
       return td;
     }
 
-    function createStudentRow(student, monthlyFee, { showRemove }) {
+    function createStudentRow(student, groupFee, { showRemove }) {
+      const monthlyFee = effectiveMonthlyFee(student, groupFee);
       const row = document.createElement("tr");
       const nameTd = document.createElement("td");
       const link = document.createElement("a");
       link.className = "student-link";
       link.href = `/students-ui/${student.id}`;
       link.textContent = student.full_name;
+      link.title = student.full_name;
       nameTd.appendChild(link);
       row.append(
         nameTd,
@@ -682,6 +718,7 @@ GROUPS_UI_HTML = """
         createAmountCell(student, monthlyFee)
       );
       const actions = document.createElement("td");
+      actions.className = "actions-cell";
       if (showRemove) {
         const removeBtn = document.createElement("button");
         removeBtn.type = "button";
@@ -698,7 +735,8 @@ GROUPS_UI_HTML = """
       return row;
     }
 
-    function unpaidExpected(student, monthlyFee) {
+    function unpaidExpected(student, groupFee) {
+      const monthlyFee = effectiveMonthlyFee(student, groupFee);
       const status = paymentStatus(
         student.id,
         paidByStudentId.get(student.id) || 0,
@@ -746,7 +784,7 @@ GROUPS_UI_HTML = """
           const status = paymentStatus(
             student.id,
             paidByStudentId.get(student.id) || 0,
-            group.monthly_fee
+            effectiveMonthlyFee(student, group.monthly_fee)
           );
           return status.className === "status-ok";
         }).length;
@@ -754,7 +792,7 @@ GROUPS_UI_HTML = """
           const status = paymentStatus(
             student.id,
             paidByStudentId.get(student.id) || 0,
-            group.monthly_fee
+            effectiveMonthlyFee(student, group.monthly_fee)
           );
           return status.className === "status-none";
         });
